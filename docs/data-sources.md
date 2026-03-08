@@ -612,15 +612,52 @@ Sistema da Receita Federal (Decreto 11.208/2022) que integra dados registrais, c
 - **Download**: https://zenodo.org/record/8101910
 - **Custo**: Gratuito
 
-### 13.6 Visualizações Possíveis
+### 13.6 ITBI Map (Mapa de Transações Reais - SP)
+
+- **O que é**: Mapa interativo com 1M+ transações reais de ITBI em São Paulo
+- **URL**: https://www.itbimap.com.br/
+- **Dados**: Preços reais de transação geolocalizados, 15-30% mais precisos que preços de anúncio
+- **Custo**: Gratuito (mapa interativo)
+- **Uso no app**: Referência visual e de dados para validação de preços por localização em SP
+
+### 13.7 IBGE API de Malhas v3 (GeoJSON direto via REST)
+
+- **Endpoint**: `https://servicodados.ibge.gov.br/api/v3/malhas/estados/{UF}?formato=application/vnd.geo+json&resolucao={0-5}`
+- **Resoluções**: 0=país, 1=região, 2=UF, 3=mesorregião, 4=microrregião, 5=município
+- **Exemplo**: `https://servicodados.ibge.gov.br/api/v3/malhas/estados/SP?formato=application/vnd.geo+json&resolucao=5`
+- **Docs**: https://servicodados.ibge.gov.br/api/docs/malhas?versao=3
+- **Uso no app**: Boundaries de municípios sem precisar baixar arquivos — serve GeoJSON direto para o frontend
+
+### 13.8 Dados Pré-processados (GitHub / Kaggle)
+
+- **geodata-br** (GitHub): GeoJSON pré-construídos por estado, licença CC0 — https://github.com/tbrugz/geodata-br
+- **Brazil GeoJSON** (Kaggle): https://www.kaggle.com/datasets/thiagobodruk/brazil-geojson
+- **Brasil Real Estate** (Kaggle): Dataset de listings para análise — https://www.kaggle.com/datasets/ashishkumarjayswal/brasil-real-estate
+
+### 13.9 Bairros — Nota sobre Fragmentação
+
+- **Não existe um dataset nacional unificado de bairros.** Cada município define seus próprios limites.
+- **IBGE Censo 2022** criou polígonos de bairros para grandes municípios (não todos). Tocantins e DF sem dados.
+- **GeoSampa (SP)**: 96 distritos (não "bairros" oficiais) disponíveis via WMS/WFS
+- **Forest-GIS Projeto Bairros**: Esforço crowdsourced para shapefile nacional — https://forest-gis.com/en/shapefile-bairros-das-cidades-brasileiras/
+- Para SP no nível bairro, usar GeoSampa distritos ou setores censitários como proxy.
+
+### 13.10 Stack Recomendada para Mapas
+
+- **Frontend**: `react-leaflet` + `leaflet` (choropleth com GeoJSON do IBGE)
+- **Heatmap de pontos**: plugin `leaflet.heat` (lat/lng + preço como intensidade)
+- **Tiles base**: OpenStreetMap (`https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`)
+- **Abordagem**: Buscar boundaries IBGE API → agregar preços por unidade geográfica → choropleth colorido por preço/m²
+
+### 13.11 Visualizações Possíveis
 
 | Visualização | Fontes | Viabilidade |
 |---|---|---|
 | **Heatmap preço/m² por cidade** | FipeZAP + IBGE malha municipal (API GeoJSON) | ✅ Imediato |
 | **Mapa de valorização** | FipeZAP série histórica + IBGE malha | ✅ Imediato |
 | **Heatmap Airbnb (SP e RJ)** | Inside Airbnb listings (lat/lng + preço) | ✅ Imediato |
-| **Mapa de transações reais (SP)** | ITBI SP + geocoding endereços | ✅ Viável |
-| **Mapa de yield por bairro (SP)** | ITBI SP + SECOVI + GeoSampa | ✅ Viável |
+| **Mapa de transações reais (SP)** | ITBI SP + ITBI Map | ✅ Imediato |
+| **Choropleth yield por distrito (SP)** | ITBI SP + SECOVI + GeoSampa distritos | ✅ Viável |
 | **Mapa demográfico** | IBGE Censo 2022 + malha setores censitários | ✅ Viável |
 | **Mapa de oportunidades** | Scraping listings + FipeZAP como referência | ⚠️ Médio prazo |
 | **Comparativo de bairros** | Yield + vacância + tendência por bairro | ⚠️ Médio prazo |
