@@ -6,9 +6,11 @@ import {
   BedDouble,
   Car,
   Ruler,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import type { Imovel } from '../types';
-import { calcularValorizacao, calcularYieldLongterm, calcularYieldAirbnb } from '../services/calculations';
+import { usePropertyMetrics } from '../hooks/usePropertyMetrics';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
@@ -16,40 +18,13 @@ const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
 interface Props {
   imovel: Imovel;
   onClick?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-export function PropertyCard({ imovel, onClick }: Props) {
-  const val = calcularValorizacao(imovel);
-
-  // Calculate yield based on renda type
-  let yieldLiquido = 0;
-  let receitaMensal = 0;
-
-  if (imovel.renda.tipo === 'airbnb' && imovel.renda.diariaMedia && imovel.renda.taxaOcupacaoPct) {
-    const custoFixo = imovel.custos.condominioMensal + imovel.custos.iptuAnual / 12;
-    const res = calcularYieldAirbnb(
-      val.valorAtual,
-      imovel.renda.diariaMedia,
-      imovel.renda.taxaOcupacaoPct,
-      custoFixo,
-    );
-    yieldLiquido = res.yieldLiquido;
-    receitaMensal = res.receitaLiquidaMensal;
-  } else if (imovel.renda.aluguelMensal) {
-    const res = calcularYieldLongterm(
-      val.valorAtual,
-      imovel.renda.aluguelMensal,
-      imovel.custos.iptuAnual,
-      imovel.custos.condominioMensal,
-      imovel.custos.seguroAnual,
-      imovel.custos.manutencaoMensal,
-      8, // admin
-      imovel.renda.taxaVacanciaPct,
-    );
-    yieldLiquido = res.yieldLiquido;
-    receitaMensal = res.receitaLiquidaAnual / 12;
-  }
-
+export function PropertyCard({ imovel, onClick, onEdit, onDelete }: Props) {
+  const val = usePropertyMetrics(imovel);
+  const { yieldLiquido, receitaMensal } = val;
   const isPositive = val.valorizacaoPct >= 0;
 
   return (
@@ -66,9 +41,21 @@ export function PropertyCard({ imovel, onClick }: Props) {
             </div>
           </div>
         </div>
-        <span className={`badge ${imovel.renda.tipo === 'airbnb' ? 'badge-airbnb' : 'badge-longterm'}`}>
-          {imovel.renda.tipo === 'airbnb' ? 'Airbnb' : 'Long-term'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {onEdit && (
+            <button className="btn-icon-sm" onClick={e => { e.stopPropagation(); onEdit(); }} title="Editar">
+              <Pencil size={14} />
+            </button>
+          )}
+          {onDelete && (
+            <button className="btn-icon-sm btn-icon-danger" onClick={e => { e.stopPropagation(); onDelete(); }} title="Excluir">
+              <Trash2 size={14} />
+            </button>
+          )}
+          <span className={`badge ${imovel.renda.tipo === 'airbnb' ? 'badge-airbnb' : 'badge-longterm'}`}>
+            {imovel.renda.tipo === 'airbnb' ? 'Airbnb' : 'Long-term'}
+          </span>
+        </div>
       </div>
 
       {/* Property details */}

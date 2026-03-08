@@ -1,6 +1,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import type { Imovel } from '../types';
 import { calcularYieldLongterm, calcularYieldAirbnb, calcularValorizacao } from '../services/calculations';
+import { TAXA_ADMINISTRACAO_PCT, CUSTOS_LIMPEZA_POR_ESTADIA, MEDIA_NOITES_POR_ESTADIA } from '../config';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -21,8 +22,8 @@ export function YieldBreakdown({ imovel }: Props) {
       imovel.renda.taxaOcupacaoPct,
       custoFixo,
       imovel.renda.custosPlataformaPct ?? 3,
-      120,
-      3,
+      CUSTOS_LIMPEZA_POR_ESTADIA,
+      MEDIA_NOITES_POR_ESTADIA,
     );
 
     const pieData = [
@@ -103,7 +104,7 @@ export function YieldBreakdown({ imovel }: Props) {
     imovel.custos.condominioMensal,
     imovel.custos.seguroAnual,
     imovel.custos.manutencaoMensal,
-    8,
+    TAXA_ADMINISTRACAO_PCT,
     imovel.renda.taxaVacanciaPct,
   );
 

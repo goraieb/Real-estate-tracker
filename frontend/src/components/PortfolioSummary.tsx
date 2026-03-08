@@ -1,6 +1,7 @@
 import { Wallet, TrendingUp, Percent, Building2 } from 'lucide-react';
 import type { Imovel } from '../types';
 import { calcularValorizacao, calcularYieldLongterm, calcularYieldAirbnb } from '../services/calculations';
+import { TAXA_ADMINISTRACAO_PCT } from '../config';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -14,7 +15,7 @@ function getYield(imovel: Imovel): number {
     return calcularYieldLongterm(
       val.valorAtual, imovel.renda.aluguelMensal, imovel.custos.iptuAnual,
       imovel.custos.condominioMensal, imovel.custos.seguroAnual, imovel.custos.manutencaoMensal,
-      8, imovel.renda.taxaVacanciaPct,
+      TAXA_ADMINISTRACAO_PCT, imovel.renda.taxaVacanciaPct,
     ).yieldLiquido;
   }
   return 0;

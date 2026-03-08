@@ -102,3 +102,110 @@ export interface ProjecaoPeriodo {
   diferenca: number;
   melhor: string;
 }
+
+// --- API types (flat, snake_case from backend) ---
+
+export interface ImovelAPI {
+  id: string;
+  nome: string;
+  tipo: string;
+  logradouro: string;
+  numero: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  cep: string;
+  latitude: number | null;
+  longitude: number | null;
+  area_util: number;
+  quartos: number;
+  vagas: number;
+  andar: number | null;
+  ano_construcao: number | null;
+  valor_compra: number;
+  data_compra: string;
+  itbi_pago: number;
+  custos_cartorio: number;
+  comissao_corretor: number;
+  valor_financiado: number;
+  taxa_juros_anual: number;
+  prazo_meses: number;
+  banco: string;
+  sistema: string;
+  saldo_devedor: number;
+  iptu_anual: number;
+  condominio_mensal: number;
+  seguro_anual: number;
+  manutencao_mensal: number;
+  tipo_renda: string;
+  aluguel_mensal: number | null;
+  taxa_vacancia_pct: number;
+  diaria_media: number | null;
+  taxa_ocupacao_pct: number | null;
+  custos_plataforma_pct: number;
+  valor_atual_estimado: number | null;
+  data_ultima_avaliacao: string | null;
+  fonte_avaliacao: string | null;
+  notas: string;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface BenchmarkAPI {
+  selic_anual: number | null;
+  ipca_12m: number | null;
+  igpm_12m: number | null;
+  poupanca_anual: number | null;
+  financiamento_tx: number | null;
+}
+
+export function apiToImovel(a: ImovelAPI): Imovel {
+  return {
+    id: a.id,
+    nome: a.nome,
+    tipo: (a.tipo || 'apartamento') as TipoImovel,
+    endereco: {
+      logradouro: a.logradouro || '',
+      numero: a.numero || '',
+      bairro: a.bairro || '',
+      cidade: a.cidade || '',
+      uf: a.uf || '',
+    },
+    areaUtil: a.area_util,
+    quartos: a.quartos,
+    vagas: a.vagas,
+    compra: {
+      valorCompra: a.valor_compra,
+      dataCompra: a.data_compra,
+      itbiPago: a.itbi_pago || undefined,
+      custosCartorio: a.custos_cartorio || undefined,
+      comissaoCorretor: a.comissao_corretor || undefined,
+    },
+    custos: {
+      iptuAnual: a.iptu_anual,
+      condominioMensal: a.condominio_mensal,
+      seguroAnual: a.seguro_anual,
+      manutencaoMensal: a.manutencao_mensal,
+    },
+    renda: {
+      tipo: (a.tipo_renda || 'aluguel_longterm') as TipoRenda,
+      aluguelMensal: a.aluguel_mensal ?? undefined,
+      taxaVacanciaPct: a.taxa_vacancia_pct,
+      diariaMedia: a.diaria_media ?? undefined,
+      taxaOcupacaoPct: a.taxa_ocupacao_pct ?? undefined,
+      custosPlataformaPct: a.custos_plataforma_pct,
+    },
+    valorAtualEstimado: a.valor_atual_estimado ?? undefined,
+    fonteAvaliacao: a.fonte_avaliacao ?? undefined,
+  };
+}
+
+export function benchmarkApiToLocal(b: BenchmarkAPI): Benchmarks {
+  return {
+    selicAnual: b.selic_anual,
+    ipca12m: b.ipca_12m,
+    igpm12m: b.igpm_12m,
+    poupancaAnual: b.poupanca_anual,
+    financiamentoTx: b.financiamento_tx,
+  };
+}

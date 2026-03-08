@@ -1,24 +1,36 @@
 """Endpoints FastAPI para o Real Estate Tracker.
 
-API REST para consultar dados de mercado, calcular yield e benchmarks.
+API REST para consultar dados de mercado, calcular yield, benchmarks e CRUD de imóveis.
 """
 
 from datetime import date
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ..data_sources.bcb import BCBClient
 from ..data_sources.ibge import IBGEClient
 from ..data_sources.ipeadata import IpeadataClient
+from ..database.db import init_db
+from ..database.repository import ImovelRepository
 from ..services.yield_calc import YieldService
 from ..services.benchmark import BenchmarkService
+from ..services.financing import FinancingService
 
 app = FastAPI(
     title="Real Estate Tracker API",
     description="API para análise de rentabilidade imobiliária no Brasil",
-    version="0.1.0",
+    version="0.2.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Instâncias dos serviços
@@ -27,6 +39,13 @@ ibge = IBGEClient()
 ipeadata = IpeadataClient()
 yield_service = YieldService()
 benchmark_service = BenchmarkService()
+financing_service = FinancingService()
+repo = ImovelRepository()
+
+
+@app.on_event("startup")
+async def startup():
+    await init_db()
 
 
 # --- Schemas ---
@@ -51,6 +70,168 @@ class AirbnbYieldRequest(BaseModel):
     taxa_plataforma_pct: float = 3
     custos_limpeza_por_estadia: float = 0
     media_noites_por_estadia: float = 3
+
+
+class ImovelCreate(BaseModel):
+    nome: str
+    tipo: str = "apartamento"
+    logradouro: str = ""
+    numero: str = ""
+    bairro: str = ""
+    cidade: str = "São Paulo"
+    uf: str = "SP"
+    cep: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    area_util: float
+    quartos: int = 0
+    vagas: int = 0
+    andar: Optional[int] = None
+    ano_construcao: Optional[int] = None
+    valor_compra: float
+    data_compra: str
+    itbi_pago: float = 0
+    custos_cartorio: float = 0
+    comissao_corretor: float = 0
+    valor_financiado: float = 0
+    taxa_juros_anual: float = 0
+    prazo_meses: int = 0
+    banco: str = ""
+    sistema: str = "SAC"
+    saldo_devedor: float = 0
+    iptu_anual: float = 0
+    condominio_mensal: float = 0
+    seguro_anual: float = 0
+    manutencao_mensal: float = 0
+    tipo_renda: str = "aluguel_longterm"
+    aluguel_mensal: Optional[float] = None
+    taxa_vacancia_pct: float = 0
+    diaria_media: Optional[float] = None
+    taxa_ocupacao_pct: Optional[float] = None
+    custos_plataforma_pct: float = 3
+    valor_atual_estimado: Optional[float] = None
+    fonte_avaliacao: Optional[str] = None
+    notas: str = ""
+
+
+class ImovelUpdate(BaseModel):
+    nome: Optional[str] = None
+    tipo: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    cep: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    area_util: Optional[float] = None
+    quartos: Optional[int] = None
+    vagas: Optional[int] = None
+    andar: Optional[int] = None
+    ano_construcao: Optional[int] = None
+    valor_compra: Optional[float] = None
+    data_compra: Optional[str] = None
+    itbi_pago: Optional[float] = None
+    custos_cartorio: Optional[float] = None
+    comissao_corretor: Optional[float] = None
+    valor_financiado: Optional[float] = None
+    taxa_juros_anual: Optional[float] = None
+    prazo_meses: Optional[int] = None
+    banco: Optional[str] = None
+    sistema: Optional[str] = None
+    saldo_devedor: Optional[float] = None
+    iptu_anual: Optional[float] = None
+    condominio_mensal: Optional[float] = None
+    seguro_anual: Optional[float] = None
+    manutencao_mensal: Optional[float] = None
+    tipo_renda: Optional[str] = None
+    aluguel_mensal: Optional[float] = None
+    taxa_vacancia_pct: Optional[float] = None
+    diaria_media: Optional[float] = None
+    taxa_ocupacao_pct: Optional[float] = None
+    custos_plataforma_pct: Optional[float] = None
+    valor_atual_estimado: Optional[float] = None
+    fonte_avaliacao: Optional[str] = None
+    notas: Optional[str] = None
+
+
+# --- Endpoints: CRUD Imóveis ---
+
+
+@app.post("/api/v1/imoveis", status_code=201)
+async def criar_imovel(req: ImovelCreate):
+    """Cria um novo imóvel."""
+    data = req.model_dump(exclude_none=True)
+    imovel = await repo.criar(data)
+    return imovel
+
+
+@app.get("/api/v1/imoveis")
+async def listar_imoveis():
+    """Lista todos os imóveis."""
+    return await repo.listar()
+
+
+@app.get("/api/v1/imoveis/{imovel_id}")
+async def buscar_imovel(imovel_id: str):
+    """Busca imóvel por ID."""
+    imovel = await repo.buscar(imovel_id)
+    if not imovel:
+        raise HTTPException(status_code=404, detail="Imóvel não encontrado")
+    return imovel
+
+
+@app.put("/api/v1/imoveis/{imovel_id}")
+async def atualizar_imovel(imovel_id: str, req: ImovelUpdate):
+    """Atualiza um imóvel (PATCH-style: só campos presentes)."""
+    existing = await repo.buscar(imovel_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Imóvel não encontrado")
+    data = req.model_dump(exclude_none=True)
+    imovel = await repo.atualizar(imovel_id, data)
+    return imovel
+
+
+@app.delete("/api/v1/imoveis/{imovel_id}")
+async def deletar_imovel(imovel_id: str):
+    """Deleta um imóvel."""
+    deleted = await repo.deletar(imovel_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Imóvel não encontrado")
+    return {"ok": True}
+
+
+@app.get("/api/v1/imoveis/{imovel_id}/yield")
+async def calcular_yield_imovel(imovel_id: str):
+    """Calcula yield do imóvel a partir dos dados cadastrados."""
+    imovel = await repo.buscar(imovel_id)
+    if not imovel:
+        raise HTTPException(status_code=404, detail="Imóvel não encontrado")
+
+    valor = imovel.get("valor_atual_estimado") or imovel["valor_compra"]
+
+    if imovel.get("tipo_renda") == "airbnb" and imovel.get("diaria_media"):
+        return yield_service.yield_airbnb(
+            valor_imovel=valor,
+            diaria_media=imovel["diaria_media"],
+            taxa_ocupacao_pct=imovel.get("taxa_ocupacao_pct", 50),
+            custos_fixos_mensal=imovel.get("condominio_mensal", 0) + imovel.get("iptu_anual", 0) / 12,
+            taxa_plataforma_pct=imovel.get("custos_plataforma_pct", 3),
+        )
+
+    if imovel.get("aluguel_mensal"):
+        return yield_service.yield_liquido(
+            valor_imovel=valor,
+            aluguel_mensal=imovel["aluguel_mensal"],
+            iptu_anual=imovel.get("iptu_anual", 0),
+            condominio_mensal=imovel.get("condominio_mensal", 0),
+            seguro_anual=imovel.get("seguro_anual", 0),
+            manutencao_mensal=imovel.get("manutencao_mensal", 0),
+            vacancia_pct=imovel.get("taxa_vacancia_pct", 0),
+        )
+
+    return {"yield_bruto": 0, "yield_liquido": 0, "message": "Dados de renda não cadastrados"}
 
 
 # --- Endpoints: Dados de Mercado ---
@@ -166,9 +347,54 @@ def comparar_benchmark(
     return benchmark_service.comparar_com_renda_fixa(yield_imovel)
 
 
+# --- Endpoints: Financiamento ---
+
+
+class FinanciamentoRequest(BaseModel):
+    valor_imovel: float
+    valor_entrada: float
+    taxa_juros_anual: float
+    prazo_meses: int
+    sistema: str = "SAC"
+
+
+class OportunidadeRequest(BaseModel):
+    valor_imovel: float
+    valor_entrada: float
+    taxa_juros_anual: float
+    prazo_meses: int
+    taxa_rendimento_anual: float
+
+
+@app.post("/api/v1/financiamento/simular")
+def simular_financiamento(req: FinanciamentoRequest):
+    """Simula financiamento com tabela SAC ou PRICE."""
+    valor_financiado = req.valor_imovel - req.valor_entrada
+    if req.sistema.upper() == "PRICE":
+        return financing_service.tabela_price(valor_financiado, req.taxa_juros_anual, req.prazo_meses)
+    return financing_service.tabela_sac(valor_financiado, req.taxa_juros_anual, req.prazo_meses)
+
+
+@app.post("/api/v1/financiamento/comparar")
+def comparar_financiamento(req: FinanciamentoRequest):
+    """Compara SAC vs PRICE."""
+    valor_financiado = req.valor_imovel - req.valor_entrada
+    return financing_service.comparar_sac_price(valor_financiado, req.taxa_juros_anual, req.prazo_meses)
+
+
+@app.post("/api/v1/financiamento/oportunidade")
+def oportunidade_financiamento(req: OportunidadeRequest):
+    """Compara compra à vista vs financiada."""
+    return financing_service.avista_vs_financiado(
+        req.valor_imovel, req.valor_entrada,
+        req.taxa_juros_anual, req.prazo_meses,
+        req.taxa_rendimento_anual,
+    )
+
+
 # --- Health check ---
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "0.2.0"}

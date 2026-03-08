@@ -1,0 +1,3 @@
+export const TAXA_ADMINISTRACAO_PCT = 8;
+export const CUSTOS_LIMPEZA_POR_ESTADIA = 120;
+export const MEDIA_NOITES_POR_ESTADIA = 3;
