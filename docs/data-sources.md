@@ -524,8 +524,22 @@ All Apify actors support programmatic access via the Apify API (REST + Python/JS
 - LGPD Full Text: https://lgpd-brazil.info
 - FGV IBRE: https://portalibre.fgv.br
 - ITBI SP (dados abertos): https://prefeitura.sp.gov.br/web/fazenda/w/acesso_a_informacao/31501
+- ITBI RJ Data.Rio (transações por logradouro): https://www.data.rio/datasets/5e4dda4d33f44b1eb9246559b281d1b8_8/about
+- ITBI RJ valores médios por m²: https://fazenda.prefeitura.rio/itbi-valores-medios-por-m2-de-transacoes-imobiliarias-por-trecho-de-logradouro/
+- ITBI Recife: http://dados.recife.pe.gov.br/dataset/imposto-sobre-transmissao-de-bens-imoveis-itbi
+- ITBI Niterói: https://www.fazenda.niteroi.rj.gov.br/site/dados-das-transacoes-imobiliarias/
+- Base dos Dados - Registro de Imóveis: https://basedosdados.org/dataset/1f81c113-41c2-493c-985a-c0f1502a37cd
+- FIPE Indicadores do Registro Imobiliário: https://www.fipe.org.br/pt-br/indices/indicadores-do-registro-imobiliario/
 - ONR: https://app.onr.org.br
 - ONR Mapa: https://mapa.onr.org.br
+- ONR RI Digital: https://registradores.onr.org.br/
+- ONR PGV-CNM: https://cnm.onr.org.br/
+- ONR API Integração: https://integracao.registrodeimoveis.org.br/
+- ONR Swagger: https://www.registrodeimoveis.org.br/swagger/index.html
+- Portal Estatístico Registral: https://www.registrodeimoveis.org.br/portal-estatistico-registral
+- Infosimples ONR API: https://infosimples.com/consultas/onr-mapa-registro-imoveis/
+- ARISP: https://arisp.com.br/
+- SINTER: https://www.sinter.fazenda.gov.br/
 - SINTER/CIB: https://cadastroimobiliario.economia.gov.br
 - IBGE Malhas Setores Censitários: https://www.ibge.gov.br/geociencias/organizacao-do-territorio/estrutura-territorial/26565-malhas-de-setores-censitarios-divisoes-intramunicipais.html
 - IBGE Malha Municipal: https://www.ibge.gov.br/geociencias/organizacao-do-territorio/malhas-territoriais/15774-malhas.html
@@ -534,48 +548,208 @@ All Apify actors support programmatic access via the Apify API (REST + Python/JS
 
 ---
 
-## 12. Validação de Valor Real de Transação (Cartórios e ITBI)
+## 12. Dados de Transações Reais - Cartórios e ITBI (Preços Efetivos de Venda)
 
-### 12.1 Dados de ITBI da Prefeitura de São Paulo (DESCOBERTA IMPORTANTE)
+> **Nota importante**: Os dados abaixo representam **preços reais de transação** (não preços de anúncio/listing).
+> No Brasil, existem duas vias principais para obter preços efetivos: (1) dados de ITBI das prefeituras,
+> que registram o valor declarado na transação para fins tributários; e (2) dados dos Registros de Imóveis
+> (cartórios), que registram a transferência de propriedade. Ambos podem subestimar o valor real
+> (subdeclaração para pagar menos imposto), mas são as melhores fontes de preço efetivo disponíveis.
+
+### 12.1 ITBI - Prefeitura de São Paulo (Melhor fonte gratuita individual)
 
 A Prefeitura de SP disponibiliza dados abertos de **todas as transações imobiliárias** com recolhimento de ITBI.
 
-- **Dados**: Código SQL (Setor-Quadra-Lote), endereço, **valor de transação** (preço real), cartório, natureza da transação, data
+- **Dados por transação (cada linha = 1 DTI paga)**:
+  - Número do cadastro do imóvel (SQL - Setor-Quadra-Lote)
+  - Endereço do imóvel
+  - **Valor da transação** (preço efetivo declarado pelo comprador)
+  - Cartório de registro do imóvel
+  - Natureza da transação
+- **O que NÃO contém**: Nomes de compradores/vendedores (sigilo fiscal), imóveis rurais, transações com ITBI pago via PPI (parcelamento incentivado)
 - **URL**: https://prefeitura.sp.gov.br/web/fazenda/w/acesso_a_informacao/31501
-- **Formato**: XLSX e ODS (jan-dez por ano, desde 2019)
+- **Formato**: XLSX (Excel) e ODS
+- **Frequência**: Mensal (atualizado com dados consolidados do mês anterior)
+- **Cobertura temporal**: Desde 2019
+- **Custo**: Gratuito, download direto sem cadastro
+- **Organização temporal**: Dados organizados pela **data de pagamento** do ITBI (não data da transação nem data de preenchimento da DTI). Exemplo: DTI preenchida em março/2021, ITBI pago em abril/2021, referente a transação de fevereiro/2021 = aparece na tabela de abril/2021.
+- **Nota jurídica**: Base de cálculo do ITBI em SP = maior valor entre a transação declarada e o valor venal do imóvel. O "valor venal de referência" foi declarado inaplicável pelo TJ-SP via IRDR.
+- **Uso no app**: **Melhor fonte para preços reais de transação em SP.** Cruzar com SQL do GeoSampa para obter coordenadas geográficas e calcular preço/m² real por bairro/rua. Permite comparar preço de anúncio vs. preço real de venda.
+
+### 12.2 ITBI - Data.Rio (Rio de Janeiro)
+
+Portal de dados abertos do RJ com múltiplos datasets de transações imobiliárias baseadas em ITBI.
+
+- **Datasets disponíveis** (múltiplas granularidades):
+  - Transações por logradouro e mês — residenciais e não residenciais, desde 2010
+  - Transações por logradouro e ano
+  - Transações por divisão administrativa (AP, RP, RA, bairro) e ano
+  - Transações de imóveis territoriais por divisão administrativa
+  - Painel de monitoramento ITBI por bairro
+  - **Valores médios por m² por trecho de logradouro** (Secretaria de Fazenda — particularmente útil)
+- **URLs**:
+  - Transações por logradouro/mês: https://www.data.rio/datasets/5e4dda4d33f44b1eb9246559b281d1b8_8/about
+  - Transações por logradouro/ano: https://www.data.rio/datasets/7ca51bd09ec54576be54c27b88fb098c_4/explore
+  - Transações por divisão administrativa: https://www.data.rio/datasets/f2ef379e0d6f431ba6bb74dfed7016a0_1/about
+  - Valores médios por m²: https://fazenda.prefeitura.rio/itbi-valores-medios-por-m2-de-transacoes-imobiliarias-por-trecho-de-logradouro/
+- **Formato**: CSV, GeoJSON, Shapefile (múltiplos formatos via portal ArcGIS Hub)
+- **Frequência**: Variável (mensal a anual dependendo do dataset)
+- **Cobertura temporal**: Desde 2010
 - **Custo**: Gratuito
-- **Limitações**: Não inclui imóveis rurais nem transações via PPI. Sem nomes de compradores/vendedores.
-- **Uso no app**: **Melhor fonte para validar valores reais de transação.** Permite cruzar preço de anúncio vs. preço real de venda, construir modelos de preço por bairro/tipo, e identificar tendências reais (não apenas preços de oferta).
+- **Uso no app**: Preços reais de transação no Rio. Dados de valor médio por m² por logradouro validam estimativas de valor de mercado. Cobertura mais longa que SP (2010 vs 2019).
 
-### 12.2 ONR - Operador Nacional do Registro Eletrônico de Imóveis
+### 12.3 ITBI - Outras Prefeituras com Dados Abertos
 
-Plataforma que conecta os 3.600+ cartórios de registro de imóveis do Brasil (Lei 13.465/2017).
+- **Recife (PE)**: Portal de Dados Abertos com dados de ITBI (características dos imóveis e informações de operações).
+  - URL: http://dados.recife.pe.gov.br/dataset/imposto-sobre-transmissao-de-bens-imoveis-itbi
+  - Custo: Gratuito
+- **Niterói (RJ)**: Secretaria da Fazenda publica média de valor de avaliação, média de valor de transação, quantidade de transações, tipologia e natureza.
+  - URL: https://www.fazenda.niteroi.rj.gov.br/site/dados-das-transacoes-imobiliarias/
+  - Custo: Gratuito
+- **Porto Alegre (RS)**: Em 2023 aprovou a **Lei da Transparência Imobiliária**, primeira do país a obrigar a prefeitura a divulgar dados de transações de ITBI. Modelo para outros municípios.
+- **Tendência nacional**: O movimento de abertura de dados de ITBI está crescendo. Verificar periodicamente portais de dados abertos de cada município de interesse.
 
-- **Serviços**: Certidão eletrônica, pesquisa de bens por CPF/CNPJ, matrícula online, monitoramento de matrícula
-- **Portais**: https://app.onr.org.br | https://mapa.onr.org.br | https://mapa.onr.org.br/sigri/
-- **API**: Não há API pública documentada. Serviços via plataforma web.
-- **Custo**: Consultas individuais pagas (custo de certidão)
-- **Uso no app**: Validação pontual de matrícula e histórico do imóvel. Não viável para consultas em massa.
+### 12.4 Base dos Dados (basedosdados.org) - Registro de Imóveis do Brasil
 
-### 12.3 SINTER - Sistema Nacional de Gestão de Informações Territoriais
+Dataset tratado e padronizado com dados de transferências imobiliárias dos cartórios, produzido pela ARISP (SP) e ARIRJ (RJ) em parceria com a FIPE.
 
-Sistema da Receita Federal (Decreto 11.208/2022) que integra dados registrais, cadastrais, geoespaciais e fiscais de todos os imóveis do Brasil.
+- **Dados disponíveis**:
+  - Transferências imobiliárias registradas **desde 2012**
+  - Total de transferências mensais (por data do negócio jurídico e por data de registro)
+  - Tipologias: compra e venda, herança, doação, entre outros
+  - Cobertura: **mais de 400 ofícios de registro de imóveis de SP e RJ**
+- **Acesso**: SQL (Google BigQuery), Python, R ou Stata via pacote `basedosdados`
+- **URL**: https://basedosdados.org/dataset/1f81c113-41c2-493c-985a-c0f1502a37cd
+- **Formato**: BigQuery SQL, download via pacotes Python/R
+- **Custo**: Gratuito (BigQuery oferece 1 TB/mês gratuito de consultas)
+- **Exemplo de consulta**:
+  ```sql
+  SELECT *
+  FROM `basedosdados.br_registro_imoveis.transferencias`
+  LIMIT 1000
+  ```
+- **IMPORTANTE**: Verificar diretamente no site se o dataset inclui **valores** de transação ou apenas contagens/volumes. A documentação enfatiza "quantidade de transações" como principal indicador publicado. Os microdados com valores podem estar restritos.
+- **Uso no app**: Volumes de transação por região/período com certeza. Se contiver valores, é a melhor fonte padronizada para preços reais cobrindo SP + RJ desde 2012.
 
-- **CIB (Cadastro Imobiliário Brasileiro)**: "CPF do imóvel" - identificação única nacional
+### 12.5 FIPE - Indicadores do Registro Imobiliário
+
+Parceria entre Registro de Imóveis do Brasil e FIPE (desde 2019) para produção de indicadores e estatísticas sobre registros de operações imobiliárias.
+
+- **Dados disponíveis**:
+  - Estatísticas de transações registradas (volumes, tendências)
+  - Dados mensais e trimestrais
+  - Análise por tipo de operação e tipo de imóvel
+- **Cobertura geográfica atual**:
+  - **Informes mensais** — Capitais: São Paulo, Rio de Janeiro, Curitiba, Florianópolis, Recife, Campo Grande. Municípios: Campinas, Ribeirão Preto, Santos, São José dos Campos, Guarulhos, Joinville, Londrina, Maringá.
+  - **Informes trimestrais**: Estado de São Paulo e suas mesorregiões (divisão IBGE)
+  - Expansão contínua prevista
+- **URL**: https://www.fipe.org.br/pt-br/indices/indicadores-do-registro-imobiliario/
+- **Formato**: PDF (informes)
+- **Custo**: Gratuito
+- **Limitação**: Dados são **agregados** (estatísticas e indicadores), não microdados individuais de transações. Não publica preços individuais.
+- **Uso no app**: Benchmark de volume de transações por cidade/região. Validação cruzada de tendências de mercado.
+
+### 12.6 ONR - Operador Nacional do Sistema de Registro Eletrônico de Imóveis
+
+Instituição oficial (Lei 13.465/2017) encarregada de implementar o Sistema de Registro Eletrônico de Imóveis (SREI), centralizando acesso a 3.600+ cartórios do Brasil.
+
+- **Serviços principais**:
+  - **Mapa do Registro de Imóveis** (https://mapa.onr.org.br/): Visualização de dados públicos sobre ocupação legal, incluindo **últimas vendas, número de matrícula, cartório responsável, e valores finais da última transação**. Usa IA para processar dados.
+  - **RI Digital** (https://registradores.onr.org.br/): Visualização instantânea de matrículas, certidões digitais com assinatura eletrônica (validade 30 dias), alertas automáticos sobre alterações em matrículas monitoradas.
+  - **PGV-CNM** (https://cnm.onr.org.br/): Validação gratuita de Código Nacional de Matrícula, sem cadastro.
+- **API oficial**:
+  - Portal de integração: https://integracao.registrodeimoveis.org.br/
+  - Documentação Swagger: https://www.registrodeimoveis.org.br/swagger/index.html
+  - Autenticação: JWT
+  - **RESTRITO A CARTÓRIOS**: Destinada exclusivamente a empresas desenvolvedoras de sistemas para cartórios. O ONR **não fornece API para terceiros**, despachantes ou documentalistas. API não pode ser cedida. Violação = cancelamento de acesso.
+  - **Anti-scraping**: Sistema bloqueia buscas massivas por robôs e acessos de fora do Brasil.
+- **API via terceiros (Infosimples)**:
+  - Web service JSON para consulta ao Mapa do ONR
+  - URL: https://infosimples.com/consultas/onr-mapa-registro-imoveis/
+  - Custo: Pago (por consulta, preço variável por volume — consultar calculadora em https://infosimples.com/consultas/precos/)
+  - Consultas em tempo real nas fontes públicas originais
+  - A Infosimples não comercializa bases de dados, apenas automação de consulta
+- **Custo das certidões diretas**: Certidões digitais via RI Digital são pagas (emolumentos cartorários, variam por estado — tipicamente R$50-150 por certidão)
+- **Uso no app**: O Mapa do ONR mostra valores da última transação por imóvel — útil para consulta pontual. Para uso em escala, Infosimples é a opção (paga). **Não há API aberta gratuita para consultas em massa.**
+
+### 12.7 SINTER - Sistema Nacional de Gestão de Informações Territoriais
+
+Sistema da Receita Federal (Decreto 8.764/2016, regulamentado pelo Decreto 11.208/2022) que integra dados de TODOS os imóveis do Brasil.
+
+- **O que integra**:
+  - Dados jurídicos de registros públicos (cartórios — escrituras, matrículas)
+  - Dados fiscais e cadastrais municipais (IPTU urbano, ITR rural)
+  - Dados rurais (INCRA/CNIR/CAR)
+  - Dados geoespaciais (georreferenciamento de imóveis)
+  - **CIB (Cadastro de Imóveis Brasileiros)**: Identificador único nacional de cada imóvel — funciona como "CPF do imóvel". Inscrição no CIB é gratuita.
+- **Plataforma**: https://www.sinter.fazenda.gov.br/
+- **Estado atual**: Lançado oficialmente em dezembro de 2022 pela Receita Federal. Em fase de expansão.
+- **Desafios de implantação**:
+  - Apenas **21% dos municípios** (1.159 de 5.570) possuem base cadastral georreferenciada (IBGE 2019)
+  - 59% (3.300) possuem cadastro sem base georreferenciada
+  - 20% (1.111) não possuem qualquer tipo de cadastro digital
+  - Antes do SINTER: União tinha 20+ bases de dados rurais não interoperáveis; 5.570 cadastros urbanos diferentes sem padronização
+- **Acesso público**: Cidadão terá acesso gratuito ao visualizador gráfico em mapa digital. Sem API pública aberta para desenvolvedores no momento.
 - **Prazos**: Capitais até 01/01/2026, demais municípios até 01/01/2027
-- **Status**: Apenas 21% dos municípios têm base cadastral georreferenciada (IBGE 2019)
-- **Portal**: https://cadastroimobiliario.economia.gov.br
-- **Uso no app**: **Futuro game-changer.** Quando implementado, será a fonte definitiva de dados de transações imobiliárias em todo o Brasil.
+- **Uso no app**: **Futuro game-changer.** Quando plenamente implementado, será o sistema mais completo do Brasil integrando registro + fiscal + geoespacial. Monitorar evolução. Não utilizável programaticamente hoje.
 
-### 12.4 Hierarquia de Confiabilidade de Preços
+### 12.8 Portal Estatístico Registral
 
-| Nível | Fonte | Confiabilidade | Acesso |
-|-------|-------|---------------|--------|
-| 1 | **ITBI SP** (valor declarado na escritura) | Alta | Gratuito (SP) |
-| 2 | **Valor venal ITBI** (referência da prefeitura) | Média-alta | Consulta individual |
-| 3 | **FipeZAP** (média de anúncios) | Média | Gratuito |
-| 4 | **Scraping ZAP/QuintoAndar** (preço pedido) | Média-baixa | Scraping |
-| 5 | **DataZAP AVM** (algoritmo) | Variável | Pago |
+Portal do Registro de Imóveis do Brasil com estatísticas e análises em parceria com a FIPE.
+
+- **URL**: https://www.registrodeimoveis.org.br/portal-estatistico-registral
+- **URL alternativa**: https://www.registrodeimoveis.org.br/estatisticas-imobiliarias
+- **Dados**: Estatísticas de registros por cidade, tipo de operação, evolução temporal
+- **Formato**: Relatórios online, gráficos interativos
+- **Custo**: Gratuito
+- **Uso no app**: Dados complementares de volume de mercado por região.
+
+### 12.9 Resumo: Acesso a Preços Reais de Transação
+
+| Fonte | Tem preço real? | Granularidade | Cobertura geográfica | Série histórica | Acesso | Custo |
+|-------|----------------|---------------|---------------------|----------------|--------|-------|
+| **ITBI São Paulo** | **Sim** (valor declarado) | Imóvel individual (SQL) | São Paulo capital | Desde 2019 | Download XLSX | Gratuito |
+| **ITBI Data.Rio** | **Sim** (agregado por logradouro) | Logradouro/bairro | Rio de Janeiro | Desde 2010 | Download CSV/GeoJSON | Gratuito |
+| **ITBI Recife** | **Sim** | Variável | Recife | Variável | Download | Gratuito |
+| **ITBI Niterói** | **Sim** (médias) | Agregado | Niterói | Variável | Download | Gratuito |
+| **Base dos Dados** | A verificar | Micro a agregado | SP + RJ (400+ cartórios) | Desde 2012 | BigQuery SQL | Gratuito |
+| **FIPE Indicadores** | Não (só volumes) | Agregado por cidade | 14 cidades | Desde 2019 | PDF | Gratuito |
+| **Mapa ONR** | **Sim** (última transação) | Imóvel individual | Nacional | Última transação | Web (pontual) | Gratuito (pontual) |
+| **Infosimples/ONR** | **Sim** (última transação) | Imóvel individual | Nacional | Última transação | API JSON | Pago (por consulta) |
+| **SINTER** | Futuro | Imóvel individual | Nacional (em implantação) | Futuro | Web | Gratuito (futuro) |
+
+### 12.10 Hierarquia de Confiabilidade de Preços
+
+| Nível | Fonte | Tipo de preço | Confiabilidade | Acesso |
+|-------|-------|--------------|---------------|--------|
+| 1 | **ITBI SP/RJ** (valor declarado na escritura) | Transação real | Alta (pode ter subdeclaração) | Gratuito |
+| 2 | **Mapa ONR** (valor registrado em cartório) | Transação real | Alta | Gratuito (pontual) / Pago (escala) |
+| 3 | **Base dos Dados ARISP/FIPE** (registro em cartório) | Transação real (se disponível) | Alta | Gratuito |
+| 4 | **Valor venal ITBI** (referência da prefeitura) | Avaliação fiscal | Média-alta | Consulta individual |
+| 5 | **FipeZAP** (média de anúncios) | Preço pedido (listing) | Média | Gratuito |
+| 6 | **Scraping ZAP/QuintoAndar** (preço pedido) | Preço pedido (listing) | Média-baixa | Scraping |
+| 7 | **DataZAP AVM** (algoritmo) | Estimativa algorítmica | Variável | Pago |
+
+### 12.11 Estratégia Recomendada para Dados de Transação Real
+
+**Fase 1 — Imediata (gratuito)**:
+1. Download e parse dos dados de ITBI de São Paulo (XLSX desde 2019)
+2. Download dos dados de ITBI do Data.Rio (CSV desde 2010)
+3. Cruzar ITBI SP com GeoSampa (SQL → coordenadas → bairro → preço/m² real)
+4. Consultar Base dos Dados via BigQuery para verificar se há valores de transação
+
+**Fase 2 — Curto prazo (gratuito)**:
+5. Integrar dados de ITBI de Recife e Niterói
+6. Monitorar novos municípios que abram dados de ITBI
+7. Baixar e analisar informes FIPE do Registro Imobiliário para volumes
+
+**Fase 3 — Médio prazo (pago)**:
+8. Avaliar Infosimples para consultas ao ONR em escala (para cidades sem ITBI aberto)
+9. Monitorar evolução do SINTER para uso futuro
+
+**Fase 4 — Longo prazo**:
+10. Integrar SINTER quando houver API pública disponível
+11. Usar CIB como identificador único para cruzar todas as fontes
 
 ---
 
