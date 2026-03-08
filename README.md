@@ -39,12 +39,60 @@ Principais fontes:
 - **Inside Airbnb** - Dados de short-term rental
 - **SECOVI-SP** - Taxa de vacância, pesquisa de locação
 
+## Estrutura do Projeto
+
+```
+Real-estate-tracker/
+├── docs/
+│   └── data-sources.md              # Levantamento completo de fontes de dados (837 linhas)
+├── backend/
+│   ├── requirements.txt
+│   ├── src/
+│   │   ├── data_sources/            # Clientes de dados
+│   │   │   ├── bcb.py               # API BCB SGS (Selic, IPCA, IGP-M, financiamento)
+│   │   │   ├── ibge.py              # API IBGE (municípios, população, malhas GeoJSON)
+│   │   │   ├── ipeadata.py          # API Ipeadata (INCC, IGP-M, séries)
+│   │   │   ├── fipezap.py           # Parser Excel FipeZAP (preço/m² venda e locação)
+│   │   │   ├── insideairbnb.py      # Download/parse Inside Airbnb (SP/RJ)
+│   │   │   └── itbi.py              # Parser ITBI SP (transações reais) + Data.Rio
+│   │   ├── models/
+│   │   │   └── property.py          # Modelo de dados (imóvel, custos, renda, métricas)
+│   │   ├── services/
+│   │   │   ├── valuation.py         # Avaliação de imóvel (valor atualizado, ganho real)
+│   │   │   ├── yield_calc.py        # Yield bruto/líquido (long-term + Airbnb + IR)
+│   │   │   └── benchmark.py         # Benchmark vs Selic/CDI/poupança/Tesouro
+│   │   └── api/
+│   │       └── routes.py            # Endpoints FastAPI
+│   └── tests/
+│       └── test_data_sources.py
+├── notebooks/
+│   └── 01_explore_data.ipynb         # Notebook exploratório
+└── .gitignore
+```
+
 ## Status
 
-🔬 **Fase atual**: Pesquisa de fontes de dados - levantamento completo das bases disponíveis.
+- [x] Fase 1: Pesquisa de fontes de dados (13 categorias, 30+ fontes)
+- [x] Fase 2: Estrutura do projeto + clientes de dados + serviços de cálculo
+- [ ] Fase 3: API FastAPI completa + frontend React
 
 ## Setup
 
 ```bash
-# Em breve
+# Clonar o repositório
+git clone <repo-url>
+cd Real-estate-tracker
+
+# Instalar dependências
+pip install -r backend/requirements.txt
+
+# Rodar API
+cd backend
+uvicorn src.api.routes:app --reload
+
+# Rodar testes
+pytest backend/tests/
+
+# Rodar notebook exploratório
+jupyter notebook notebooks/01_explore_data.ipynb
 ```
