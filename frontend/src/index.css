@@ -9,6 +9,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f8fafc;
-  color: #1e293b;
+  background: var(--bg-page, #f8fafc);
+  color: var(--text-body, #1e293b);
+  transition: background-color 0.2s, color 0.2s;
 }

@@ -4,6 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -70,6 +71,7 @@ interface Props {
 }
 
 export function FinancingSimulator({ valorImovelInicial }: Props) {
+  const tc = useThemeColors();
   const [valorImovel, setValorImovel] = useState(valorImovelInicial ?? 500000);
   const [entradaPct, setEntradaPct] = useState(20);
   const [taxaJuros, setTaxaJuros] = useState(10.5);
@@ -191,7 +193,7 @@ export function FinancingSimulator({ valorImovelInicial }: Props) {
                 <XAxis dataKey="ano" tickFormatter={v => `${v}a`} />
                 <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v) => fmt(Number(v))} />
-                <Area type="monotone" dataKey="saldo" stroke="#6366f1" fill="#e0e7ff" />
+                <Area type="monotone" dataKey="saldo" stroke={tc.indigo} fill={tc.indigoFill} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -206,8 +208,8 @@ export function FinancingSimulator({ valorImovelInicial }: Props) {
                 <YAxis tickFormatter={v => `${(v / 1000).toFixed(1)}k`} />
                 <Tooltip formatter={(v) => fmt(Number(v))} />
                 <Legend />
-                <Bar dataKey="amortizacao" name="Amortização" stackId="a" fill="#10b981" />
-                <Bar dataKey="juros" name="Juros" stackId="a" fill="#ef4444" />
+                <Bar dataKey="amortizacao" name="Amortização" stackId="a" fill={tc.green} />
+                <Bar dataKey="juros" name="Juros" stackId="a" fill={tc.red} />
               </BarChart>
             </ResponsiveContainer>
           </div>

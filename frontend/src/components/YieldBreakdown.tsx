@@ -2,16 +2,17 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import type { Imovel } from '../types';
 import { calcularYieldLongterm, calcularYieldAirbnb, calcularValorizacao } from '../services/calculations';
 import { TAXA_ADMINISTRACAO_PCT, CUSTOS_LIMPEZA_POR_ESTADIA, MEDIA_NOITES_POR_ESTADIA } from '../config';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6', '#ec4899'];
 
 interface Props {
   imovel: Imovel;
 }
 
 export function YieldBreakdown({ imovel }: Props) {
+  const tc = useThemeColors();
+  const COLORS = [tc.green, tc.orange, tc.red, tc.indigo, tc.purple, tc.pink];
   const val = calcularValorizacao(imovel);
 
   if (imovel.renda.tipo === 'airbnb' && imovel.renda.diariaMedia && imovel.renda.taxaOcupacaoPct) {

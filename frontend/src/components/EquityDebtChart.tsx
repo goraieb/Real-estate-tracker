@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import type { Imovel, Benchmarks } from '../types';
 import { calcularEvolucaoPortfolio } from '../services/calculations';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function EquityDebtChart({ imoveis, benchmarks }: Props) {
+  const tc = useThemeColors();
   const evolucao = useMemo(
     () => calcularEvolucaoPortfolio(imoveis, benchmarks),
     [imoveis, benchmarks],
@@ -65,15 +67,15 @@ export function EquityDebtChart({ imoveis, benchmarks }: Props) {
             <Area
               type="monotone"
               dataKey="equity"
-              stroke="#10b981"
-              fill="#10b981"
+              stroke={tc.green}
+              fill={tc.green}
               fillOpacity={0.3}
             />
             <Area
               type="monotone"
               dataKey="divida"
-              stroke="#ef4444"
-              fill="#ef4444"
+              stroke={tc.red}
+              fill={tc.red}
               fillOpacity={0.3}
             />
           </AreaChart>
@@ -94,9 +96,9 @@ export function EquityDebtChart({ imoveis, benchmarks }: Props) {
               labelFormatter={label => `Mês: ${label}`}
             />
             <Legend />
-            <Line type="monotone" dataKey="Portfólio" stroke="#10b981" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="SELIC" stroke="#3b82f6" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-            <Line type="monotone" dataKey="IPCA+6%" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+            <Line type="monotone" dataKey="Portfólio" stroke={tc.green} strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="SELIC" stroke={tc.blue} strokeWidth={2} dot={false} strokeDasharray="5 5" />
+            <Line type="monotone" dataKey="IPCA+6%" stroke={tc.orange} strokeWidth={2} dot={false} strokeDasharray="5 5" />
           </LineChart>
         </ResponsiveContainer>
       </div>

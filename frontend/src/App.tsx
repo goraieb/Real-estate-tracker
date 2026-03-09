@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info } from 'lucide-react';
+import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info, Sun, Moon } from 'lucide-react';
 import { PropertyCard } from './components/PropertyCard';
 import { PropertyMap } from './components/PropertyMap';
 import { MapFilters } from './components/MapFilters';
@@ -40,9 +40,9 @@ type AppTab = 'dashboard' | 'evolution' | 'simulator';
 
 function App() {
   const {
-    imoveis, selectedId, benchmarks, isLoading, error, isDemo,
+    imoveis, selectedId, benchmarks, isLoading, error, isDemo, theme,
     fetchImoveis, fetchBenchmarks, selectImovel,
-    criarImovel, atualizarImovel, deletarImovel,
+    criarImovel, atualizarImovel, deletarImovel, toggleTheme,
   } = useStore();
 
   const [showForm, setShowForm] = useState(false);
@@ -100,7 +100,7 @@ function App() {
           <LayoutDashboard size={24} />
           <h1>Real Estate Tracker</h1>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div className="header-actions">
           {activeTab === 'dashboard' && (
             <div className="view-toggle">
               <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>
@@ -111,6 +111,9 @@ function App() {
               </button>
             </div>
           )}
+          <button className="btn-theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}>
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <button className="btn-add" onClick={handleAdd}>
             <Plus size={18} />
             Adicionar imóvel
