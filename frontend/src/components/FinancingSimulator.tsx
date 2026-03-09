@@ -190,7 +190,7 @@ export function FinancingSimulator({ valorImovelInicial }: Props) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="ano" tickFormatter={v => `${v}a`} />
                 <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => fmt(v)} />
+                <Tooltip formatter={(v) => fmt(Number(v))} />
                 <Area type="monotone" dataKey="saldo" stroke="#6366f1" fill="#e0e7ff" />
               </AreaChart>
             </ResponsiveContainer>
@@ -204,7 +204,7 @@ export function FinancingSimulator({ valorImovelInicial }: Props) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="ano" tickFormatter={v => `${v}a`} />
                 <YAxis tickFormatter={v => `${(v / 1000).toFixed(1)}k`} />
-                <Tooltip formatter={(v: number) => fmt(v)} />
+                <Tooltip formatter={(v) => fmt(Number(v))} />
                 <Legend />
                 <Bar dataKey="amortizacao" name="Amortização" stackId="a" fill="#10b981" />
                 <Bar dataKey="juros" name="Juros" stackId="a" fill="#ef4444" />

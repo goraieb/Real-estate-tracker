@@ -38,7 +38,7 @@ export function BenchmarkChart({ yieldImovel, selicAnual, ipca12m, nomeImovel }:
             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
             <XAxis type="number" domain={[0, 'auto']} tickFormatter={v => `${v}%`} />
             <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 13 }} />
-            <Tooltip formatter={(v: number) => `${v.toFixed(2)}% a.a.`} />
+            <Tooltip formatter={(v) => `${Number(v).toFixed(2)}% a.a.`} />
             <ReferenceLine x={yieldImovel} stroke="#10b981" strokeDasharray="3 3" />
             <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
               {data.map((entry, i) => (

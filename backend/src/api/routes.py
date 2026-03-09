@@ -4,10 +4,13 @@ API REST para consultar dados de mercado, calcular yield, benchmarks e CRUD de i
 """
 
 from datetime import date
+from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..data_sources.bcb import BCBClient
@@ -398,3 +401,19 @@ def oportunidade_financiamento(req: OportunidadeRequest):
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "0.2.0"}
+
+
+# --- Serve frontend static files ---
+
+FRONTEND_DIST = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
+
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="static")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(request: Request, full_path: str):
+        """Serve the React SPA for any non-API route."""
+        file_path = FRONTEND_DIST / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(FRONTEND_DIST / "index.html")

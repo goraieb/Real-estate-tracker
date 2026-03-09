@@ -45,7 +45,7 @@ export function YieldBreakdown({ imovel }: Props) {
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => fmt(v)} />
+                <Tooltip formatter={(v) => fmt(Number(v))} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -129,7 +129,7 @@ export function YieldBreakdown({ imovel }: Props) {
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip formatter={(v: number) => fmt(v)} />
+              <Tooltip formatter={(v) => fmt(Number(v))} />
             </PieChart>
           </ResponsiveContainer>
         </div>
