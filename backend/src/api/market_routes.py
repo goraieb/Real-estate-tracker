@@ -43,6 +43,99 @@ async def get_db():
 # --- Endpoints ---
 
 
+def _build_transaction_filters(
+    bbox: Optional[str],
+    data_inicio: Optional[str],
+    data_fim: Optional[str],
+    tipo: Optional[str],
+    preco_m2_min: Optional[float],
+    preco_m2_max: Optional[float],
+    bairro: Optional[str],
+    require_geocoded: bool = True,
+) -> tuple[str, list]:
+    """Build WHERE clause and params for transaction queries."""
+    conditions: list[str] = []
+    params: list = []
+
+    if require_geocoded:
+        conditions.extend(["geocoded = 1", "latitude IS NOT NULL", "longitude IS NOT NULL"])
+
+    if bbox:
+        parts = [float(x) for x in bbox.split(",")]
+        if len(parts) == 4:
+            lat1, lng1, lat2, lng2 = parts
+            conditions.append("latitude BETWEEN ? AND ?")
+            params.extend([min(lat1, lat2), max(lat1, lat2)])
+            conditions.append("longitude BETWEEN ? AND ?")
+            params.extend([min(lng1, lng2), max(lng1, lng2)])
+
+    if data_inicio:
+        conditions.append("data_transacao >= ?")
+        params.append(data_inicio)
+    if data_fim:
+        conditions.append("data_transacao <= ?")
+        params.append(data_fim)
+    if tipo:
+        conditions.append("tipo_imovel LIKE ?")
+        params.append(f"%{tipo}%")
+    if preco_m2_min is not None:
+        conditions.append("preco_m2 >= ?")
+        params.append(preco_m2_min)
+    if preco_m2_max is not None:
+        conditions.append("preco_m2 <= ?")
+        params.append(preco_m2_max)
+    if bairro:
+        conditions.append("bairro LIKE ?")
+        params.append(f"%{bairro}%")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+    return where, params
+
+
+@router.get("/transactions/count")
+async def get_transaction_count(
+    bbox: Optional[str] = Query(None, description="lat1,lng1,lat2,lng2"),
+    data_inicio: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    data_fim: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    tipo: Optional[str] = Query(None),
+    preco_m2_min: Optional[float] = Query(None),
+    preco_m2_max: Optional[float] = Query(None),
+    bairro: Optional[str] = Query(None),
+):
+    """Get total count of transactions matching filters (for pagination)."""
+    db = await get_db()
+    try:
+        where, params = _build_transaction_filters(
+            bbox, data_inicio, data_fim, tipo, preco_m2_min, preco_m2_max, bairro
+        )
+        cursor = await db.execute(
+            f"SELECT COUNT(*) as total FROM transacoes_itbi WHERE {where}", params
+        )
+        row = await cursor.fetchone()
+
+        # Also get total without filters for context
+        cursor_all = await db.execute(
+            "SELECT COUNT(*) as total FROM transacoes_itbi"
+        )
+        row_all = await cursor_all.fetchone()
+
+        # Date range in DB
+        cursor_range = await db.execute(
+            "SELECT MIN(data_transacao) as min_date, MAX(data_transacao) as max_date FROM transacoes_itbi"
+        )
+        row_range = await cursor_range.fetchone()
+
+        return {
+            "filtered": row["total"] if row else 0,
+            "total": row_all["total"] if row_all else 0,
+            "minDate": row_range["min_date"] if row_range else None,
+            "maxDate": row_range["max_date"] if row_range else None,
+            "source": "database",
+        }
+    finally:
+        await db.close()
+
+
 @router.get("/transactions")
 async def get_transactions(
     bbox: Optional[str] = Query(None, description="lat1,lng1,lat2,lng2"),
@@ -53,43 +146,23 @@ async def get_transactions(
     preco_m2_max: Optional[float] = Query(None),
     bairro: Optional[str] = Query(None),
     limit: int = Query(5000, le=10000),
+    offset: int = Query(0, ge=0),
 ):
     """Get geocoded ITBI transactions as GeoJSON FeatureCollection."""
     db = await get_db()
     try:
-        conditions = ["geocoded = 1", "latitude IS NOT NULL", "longitude IS NOT NULL"]
-        params: list = []
+        where, params = _build_transaction_filters(
+            bbox, data_inicio, data_fim, tipo, preco_m2_min, preco_m2_max, bairro
+        )
 
-        if bbox:
-            parts = [float(x) for x in bbox.split(",")]
-            if len(parts) == 4:
-                lat1, lng1, lat2, lng2 = parts
-                conditions.append("latitude BETWEEN ? AND ?")
-                params.extend([min(lat1, lat2), max(lat1, lat2)])
-                conditions.append("longitude BETWEEN ? AND ?")
-                params.extend([min(lng1, lng2), max(lng1, lng2)])
+        # Get total count for this query
+        cursor_count = await db.execute(
+            f"SELECT COUNT(*) as total FROM transacoes_itbi WHERE {where}", params
+        )
+        count_row = await cursor_count.fetchone()
+        total = count_row["total"] if count_row else 0
 
-        if data_inicio:
-            conditions.append("data_transacao >= ?")
-            params.append(data_inicio)
-        if data_fim:
-            conditions.append("data_transacao <= ?")
-            params.append(data_fim)
-        if tipo:
-            conditions.append("tipo_imovel LIKE ?")
-            params.append(f"%{tipo}%")
-        if preco_m2_min is not None:
-            conditions.append("preco_m2 >= ?")
-            params.append(preco_m2_min)
-        if preco_m2_max is not None:
-            conditions.append("preco_m2 <= ?")
-            params.append(preco_m2_max)
-        if bairro:
-            conditions.append("bairro LIKE ?")
-            params.append(f"%{bairro}%")
-
-        where = " AND ".join(conditions)
-        params.append(limit)
+        params.extend([limit, offset])
 
         cursor = await db.execute(
             f"""SELECT id, latitude, longitude, valor_transacao, preco_m2,
@@ -98,7 +171,7 @@ async def get_transactions(
             FROM transacoes_itbi
             WHERE {where}
             ORDER BY data_transacao DESC
-            LIMIT ?""",
+            LIMIT ? OFFSET ?""",
             params,
         )
         rows = await cursor.fetchall()
@@ -125,7 +198,14 @@ async def get_transactions(
                 }
             )
 
-        return {"type": "FeatureCollection", "features": features}
+        return {
+            "type": "FeatureCollection",
+            "features": features,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "source": "database",
+        }
     finally:
         await db.close()
 
