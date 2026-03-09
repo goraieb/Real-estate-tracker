@@ -270,3 +270,91 @@ export function benchmarkApiToLocal(b: BenchmarkAPI): Benchmarks {
     financiamentoTx: b.financiamento_tx,
   };
 }
+
+// ============================================
+// MARKET EXPLORER TYPES
+// ============================================
+
+export interface TransacaoITBI {
+  id: number;
+  latitude: number;
+  longitude: number;
+  valorTransacao: number;
+  precoM2: number | null;
+  areaM2: number | null;
+  tipoImovel: string | null;
+  bairro: string | null;
+  logradouro: string | null;
+  dataTransacao: string;
+}
+
+export interface NeighborhoodStats {
+  bairro: string;
+  qtdTransacoes: number;
+  precoM2Medio: number | null;
+  precoM2Mediano: number | null;
+  centroLat: number | null;
+  centroLng: number | null;
+  yieldEstimado?: number;
+}
+
+export interface YieldBairro {
+  bairro: string;
+  precoM2Compra: number;
+  aluguelM2Estimado: number;
+  yieldAnualPct: number;
+  yieldMensalPct: number;
+  qtdTransacoes: number;
+  centroLat: number | null;
+  centroLng: number | null;
+}
+
+export interface PriceEvolutionPoint {
+  date: string;
+  medianPrecoM2: number;
+  count: number;
+}
+
+export interface MarketAlert {
+  id: number;
+  tipo: 'price_drop' | 'new_transaction' | 'yield_change';
+  bairro?: string;
+  logradouro?: string;
+  preco_m2_limite?: number;
+  yield_limite?: number;
+  ativo: boolean;
+  ultimo_disparo?: string;
+  criado_em: string;
+}
+
+export interface MarketStats {
+  totalTransacoes: number;
+  precoM2Medio: number | null;
+  precoM2Min: number | null;
+  precoM2Max: number | null;
+  topBairros: { bairro: string; precoM2: number; qtd: number }[];
+  bottomBairros: { bairro: string; precoM2: number; qtd: number }[];
+}
+
+export type MarketLayer = 'clusters' | 'choropleth' | 'heatmap' | 'portfolio' | 'yield';
+
+export interface MarketFilters {
+  dataInicio: string;
+  dataFim: string;
+  tipoImovel: string[];
+  precoM2Min: number;
+  precoM2Max: number;
+  areaMin: number;
+  areaMax: number;
+  activeLayers: MarketLayer[];
+}
+
+export interface MarketExplorerState {
+  transactions: TransacaoITBI[];
+  neighborhoods: NeighborhoodStats[];
+  yieldData: YieldBairro[];
+  alerts: MarketAlert[];
+  selectedBairro: string | null;
+  filters: MarketFilters;
+  isLoading: boolean;
+}

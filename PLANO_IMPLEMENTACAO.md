@@ -759,11 +759,50 @@ services:
 
 ---
 
+## Fase 7 — Mobile-First + Dark Mode (Dracula-inspired) ✅
+
+### 7.1 Mobile-First Responsive Redesign
+- Reescrito App.css com media queries `min-width` (mobile-first)
+- Breakpoints: 480px (tablet portrait), 768px (tablet landscape), 1024px (desktop)
+- Layout base mobile: single column, full-width cards, stacked grids
+- Form modal: full-screen no mobile, 600px max no desktop
+- Map: `60vh` responsivo em vez de 500px fixo
+- Botões/inputs: min-height 44px (touch-friendly)
+- Tabs e form-tabs com scroll horizontal no mobile
+- Font-size 16px nos inputs (previne zoom no iOS)
+
+### 7.2 Dark Mode (VSCode Dracula-inspired)
+- Todas as cores extraídas para CSS custom properties (`:root` / `[data-theme="dark"]`)
+- Paleta dark: #282a36 (bg), #343746 (cards), #44475a (borders), #f8f8f2 (text), #50fa7b (green), #ff5555 (red), #bd93f9 (purple), #8be9fd (cyan), #ffb86c (orange), #ff79c6 (pink)
+- Toggle Sun/Moon no header, persistido em localStorage
+- Respeita `prefers-color-scheme` como default
+- State gerenciado no Zustand store (`theme`, `toggleTheme`)
+- Hook `useThemeColors()` para cores nos charts (Recharts)
+- Overrides CSS para Recharts tooltips/grids/legends no dark mode
+- Leaflet tiles com filtro CSS para dark mode
+
+### Arquivos Modificados
+| Arquivo | Mudança |
+|---------|---------|
+| `frontend/src/App.css` | CSS variables + mobile-first rewrite completo |
+| `frontend/src/index.css` | Theme-aware body styles |
+| `frontend/src/store/useStore.ts` | `theme` state + `toggleTheme` action |
+| `frontend/src/App.tsx` | Theme toggle button (Sun/Moon) |
+| `frontend/src/hooks/useThemeColors.ts` | **NOVO** — hook para cores de charts |
+| `frontend/src/components/YieldBreakdown.tsx` | Chart colors via hook |
+| `frontend/src/components/BenchmarkChart.tsx` | Chart colors via hook |
+| `frontend/src/components/EquityDebtChart.tsx` | Chart colors via hook |
+| `frontend/src/components/PortfolioEvolution.tsx` | Chart colors via hook |
+| `frontend/src/components/FinancingSimulator.tsx` | Chart colors via hook |
+| `frontend/src/components/PropertyCard.tsx` | Remove inline style colors |
+
+---
+
 ## Ordem de Execução (Priorizada)
 
 ```
-Fase 1 → Fase 2 → Fase 4 → Fase 3 → Fase 5 → Fase 6
-  DB       API      Mapas    Form     Financ.   Polish
+Fase 1 → Fase 2 → Fase 4 → Fase 3 → Fase 5 → Fase 7 ✅ → Fase 6
+  DB       API      Mapas    Form     Financ.   UI/UX       Polish
 ```
 
 **Justificativa da ordem:**
@@ -772,7 +811,8 @@ Fase 1 → Fase 2 → Fase 4 → Fase 3 → Fase 5 → Fase 6
 3. **Fase 4 (Mapas)** — Prioridade do usuário; diferencial visual forte
 4. **Fase 3 (Form)** — CRUD permite sair do mock; depende da Fase 1+2
 5. **Fase 5 (Financ.)** — Feature nova independente; pode ser feita em paralelo com Fase 4
-6. **Fase 6 (Polish)** — Qualidade e testes; último passo antes de "produção"
+6. **Fase 7 (Mobile-First + Dark Mode)** — UX essencial; mobile-first e tema escuro
+7. **Fase 6 (Polish)** — Qualidade e testes; último passo antes de "produção"
 
 ---
 

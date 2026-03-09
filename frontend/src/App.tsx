@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info } from 'lucide-react';
+import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info, Sun, Moon, Search } from 'lucide-react';
 import { PropertyCard } from './components/PropertyCard';
 import { PropertyMap } from './components/PropertyMap';
 import { MapFilters } from './components/MapFilters';
@@ -11,6 +11,7 @@ import { EquityDebtChart } from './components/EquityDebtChart';
 import { PropertyForm } from './components/PropertyForm';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { FinancingSimulator } from './components/FinancingSimulator';
+import { MarketExplorer } from './components/MarketExplorer';
 import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
 import { MOCK_MARKET_DATA } from './services/mockMarketData';
@@ -36,13 +37,13 @@ function getYields(imovel: Imovel): { yieldBruto: number; yieldLiquido: number }
   return { yieldBruto: 0, yieldLiquido: 0 };
 }
 
-type AppTab = 'dashboard' | 'evolution' | 'simulator';
+type AppTab = 'dashboard' | 'evolution' | 'simulator' | 'market';
 
 function App() {
   const {
-    imoveis, selectedId, benchmarks, isLoading, error, isDemo,
+    imoveis, selectedId, benchmarks, isLoading, error, isDemo, theme,
     fetchImoveis, fetchBenchmarks, selectImovel,
-    criarImovel, atualizarImovel, deletarImovel,
+    criarImovel, atualizarImovel, deletarImovel, toggleTheme,
   } = useStore();
 
   const [showForm, setShowForm] = useState(false);
@@ -100,7 +101,7 @@ function App() {
           <LayoutDashboard size={24} />
           <h1>Real Estate Tracker</h1>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div className="header-actions">
           {activeTab === 'dashboard' && (
             <div className="view-toggle">
               <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>
@@ -111,6 +112,9 @@ function App() {
               </button>
             </div>
           )}
+          <button className="btn-theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}>
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <button className="btn-add" onClick={handleAdd}>
             <Plus size={18} />
             Adicionar imóvel
@@ -132,9 +136,15 @@ function App() {
           <Calculator size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
           Simulador
         </button>
+        <button className={`app-tab ${activeTab === 'market' ? 'active' : ''}`} onClick={() => setActiveTab('market')}>
+          <Search size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
+          Explorador de Mercado
+        </button>
       </div>
 
-      {activeTab === 'simulator' ? (
+      {activeTab === 'market' ? (
+        <MarketExplorer userProperties={imoveis} />
+      ) : activeTab === 'simulator' ? (
         <FinancingSimulator
           valorImovelInicial={selected?.compra.valorCompra}
         />

@@ -102,7 +102,7 @@ export function PropertyCard({ imovel, benchmarks, onClick, onEdit, onDelete }: 
         </div>
 
         {/* Comparison with benchmarks */}
-        <div className="value-row" style={{ fontSize: '0.8em', opacity: 0.85 }}>
+        <div className="value-row card-comparison-row">
           <span className="label">
             <Landmark size={12} style={{ verticalAlign: 'text-bottom', marginRight: 2 }} />
             vs SELIC
@@ -111,7 +111,7 @@ export function PropertyCard({ imovel, benchmarks, onClick, onEdit, onDelete }: 
             {fmtPp(vd.alphaVsSelicPct)}
           </span>
         </div>
-        <div className="value-row" style={{ fontSize: '0.8em', opacity: 0.85 }}>
+        <div className="value-row card-comparison-row">
           <span className="label">vs IPCA+6%</span>
           <span className={`value ${vd.alphaVsIpcaPct >= 0 ? 'positive' : 'negative'}`}>
             {fmtPp(vd.alphaVsIpcaPct)}

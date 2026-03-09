@@ -11,6 +11,8 @@ openpyxl>=3.1.0        # Excel file parsing (FipeZAP)
 # Geographic data
 geopandas>=0.14.0      # GeoJSON/shapefile processing
 shapely>=2.0.0         # Geometric operations
+geobr>=1.0.0           # Brazilian geographic boundaries (IBGE)
+geopy>=2.4.0           # Geocoding (Nominatim)
 
 # Web framework
 fastapi>=0.104.0

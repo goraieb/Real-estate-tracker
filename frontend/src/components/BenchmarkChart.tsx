@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { calcularBenchmarks, calcularRetornoTotal } from '../services/calculations';
 import type { Benchmarks } from '../types';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 interface Props {
   yieldBruto: number;
@@ -27,6 +28,7 @@ type ViewMode = 'yield' | 'bruto' | 'liquido';
 
 export function BenchmarkChart({ yieldBruto, yieldLiquido, valorizacao12mPct, selicAnual, ipca12m, nomeImovel, benchmarksData }: Props) {
   const [view, setView] = useState<ViewMode>('liquido');
+  const tc = useThemeColors();
 
   const yieldBenchmarks = calcularBenchmarks(yieldLiquido, selicAnual, ipca12m);
   const retornoTotal = calcularRetornoTotal(yieldBruto, yieldLiquido, valorizacao12mPct, benchmarksData ?? null);
@@ -39,32 +41,32 @@ export function BenchmarkChart({ yieldBruto, yieldLiquido, valorizacao12mPct, se
     refValue = yieldLiquido;
     title = 'Yield Líquido vs Renda Fixa';
     data = [
-      { name: nomeImovel, valor: yieldLiquido, fill: '#10b981' },
+      { name: nomeImovel, valor: yieldLiquido, fill: tc.green },
       ...yieldBenchmarks.map(b => ({
         name: b.nome,
         valor: b.taxaLiquida ?? b.taxa,
-        fill: '#64748b',
+        fill: tc.muted,
       })),
     ];
   } else if (view === 'bruto') {
     refValue = retornoTotal.retornoBrutoImovelPct;
     title = 'Retorno Total Bruto (Yield + Valorização 12m)';
     data = [
-      { name: `${nomeImovel} (total)`, valor: retornoTotal.retornoBrutoImovelPct, fill: '#10b981' },
-      { name: 'Selic', valor: retornoTotal.retornoBrutoSelicPct, fill: '#64748b' },
-      { name: 'CDI', valor: retornoTotal.retornoBrutoCdiPct, fill: '#64748b' },
-      { name: 'IPCA+6%', valor: retornoTotal.retornoBrutoIpcaMais6Pct, fill: '#64748b' },
-      { name: 'Poupança', valor: retornoTotal.retornoBrutoPoupancaPct, fill: '#64748b' },
+      { name: `${nomeImovel} (total)`, valor: retornoTotal.retornoBrutoImovelPct, fill: tc.green },
+      { name: 'Selic', valor: retornoTotal.retornoBrutoSelicPct, fill: tc.muted },
+      { name: 'CDI', valor: retornoTotal.retornoBrutoCdiPct, fill: tc.muted },
+      { name: 'IPCA+6%', valor: retornoTotal.retornoBrutoIpcaMais6Pct, fill: tc.muted },
+      { name: 'Poupança', valor: retornoTotal.retornoBrutoPoupancaPct, fill: tc.muted },
     ];
   } else {
     refValue = retornoTotal.retornoLiquidoImovelPct;
     title = 'Retorno Total Líquido (após IR e custos)';
     data = [
-      { name: `${nomeImovel} (total)`, valor: retornoTotal.retornoLiquidoImovelPct, fill: '#10b981' },
-      { name: 'Selic líq.', valor: retornoTotal.retornoLiquidoSelicPct, fill: '#64748b' },
-      { name: 'CDI líq.', valor: retornoTotal.retornoLiquidoCdiPct, fill: '#64748b' },
-      { name: 'IPCA+6% líq.', valor: retornoTotal.retornoLiquidoIpcaMais6Pct, fill: '#64748b' },
-      { name: 'Poupança', valor: retornoTotal.retornoLiquidoPoupancaPct, fill: '#64748b' },
+      { name: `${nomeImovel} (total)`, valor: retornoTotal.retornoLiquidoImovelPct, fill: tc.green },
+      { name: 'Selic líq.', valor: retornoTotal.retornoLiquidoSelicPct, fill: tc.muted },
+      { name: 'CDI líq.', valor: retornoTotal.retornoLiquidoCdiPct, fill: tc.muted },
+      { name: 'IPCA+6% líq.', valor: retornoTotal.retornoLiquidoIpcaMais6Pct, fill: tc.muted },
+      { name: 'Poupança', valor: retornoTotal.retornoLiquidoPoupancaPct, fill: tc.muted },
     ];
   }
 
@@ -88,7 +90,7 @@ export function BenchmarkChart({ yieldBruto, yieldLiquido, valorizacao12mPct, se
       <p className="benchmark-subtitle">{title}</p>
 
       {view !== 'yield' && (
-        <div className="benchmark-breakdown" style={{ fontSize: '0.8em', color: '#64748b', marginBottom: 8 }}>
+        <div className="benchmark-breakdown">
           {view === 'bruto' ? (
             <span>Yield bruto {yieldBruto.toFixed(1)}% + Valorização {valorizacao12mPct >= 0 ? '+' : ''}{valorizacao12mPct.toFixed(1)}% = {retornoTotal.retornoBrutoImovelPct.toFixed(1)}%</span>
           ) : (
@@ -104,7 +106,7 @@ export function BenchmarkChart({ yieldBruto, yieldLiquido, valorizacao12mPct, se
             <XAxis type="number" domain={[0, 'auto']} tickFormatter={v => `${v}%`} />
             <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 12 }} />
             <Tooltip formatter={(v) => `${Number(v).toFixed(2)}% a.a.`} />
-            <ReferenceLine x={refValue} stroke="#10b981" strokeDasharray="3 3" />
+            <ReferenceLine x={refValue} stroke={tc.refLine} strokeDasharray="3 3" />
             <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
               {data.map((entry, i) => (
                 <Cell key={i} fill={entry.fill} />

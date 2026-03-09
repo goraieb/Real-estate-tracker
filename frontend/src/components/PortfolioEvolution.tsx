@@ -12,10 +12,9 @@ import {
 import { TrendingUp, Wallet, Building2 } from 'lucide-react';
 import type { Imovel, Benchmarks } from '../types';
 import { calcularEvolucaoPortfolio } from '../services/calculations';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
-const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 interface Props {
   imoveis: Imovel[];
@@ -23,6 +22,8 @@ interface Props {
 }
 
 export function PortfolioEvolution({ imoveis, benchmarks }: Props) {
+  const tc = useThemeColors();
+  const COLORS = [tc.green, tc.blue, tc.orange, tc.red, tc.purple, tc.pink];
   const evolucao = useMemo(
     () => calcularEvolucaoPortfolio(imoveis, benchmarks),
     [imoveis, benchmarks],
@@ -70,14 +71,14 @@ export function PortfolioEvolution({ imoveis, benchmarks }: Props) {
           <Wallet size={18} />
           <div>
             <span className="evo-label">Dívida Total</span>
-            <span className="evo-value" style={{ color: '#ef4444' }}>{fmt(totalDivida)}</span>
+            <span className="evo-value negative">{fmt(totalDivida)}</span>
           </div>
         </div>
         <div className="evo-card">
           <TrendingUp size={18} />
           <div>
             <span className="evo-label">Equity Total</span>
-            <span className="evo-value" style={{ color: '#10b981' }}>{fmt(totalEquity)}</span>
+            <span className="evo-value positive">{fmt(totalEquity)}</span>
           </div>
         </div>
         <div className="evo-card">

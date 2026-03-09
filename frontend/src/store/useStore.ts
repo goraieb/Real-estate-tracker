@@ -6,6 +6,20 @@ import { MOCK_IMOVEIS, MOCK_BENCHMARKS } from '../services/mockData';
 
 const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
 
+type Theme = 'light' | 'dark';
+
+function getInitialTheme(): Theme {
+  if (typeof window === 'undefined') return 'light';
+  const stored = localStorage.getItem('theme');
+  if (stored === 'dark' || stored === 'light') return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('theme', theme);
+}
+
 interface AppState {
   imoveis: Imovel[];
   selectedId: string | null;
@@ -13,6 +27,7 @@ interface AppState {
   isLoading: boolean;
   error: string | null;
   isDemo: boolean;
+  theme: Theme;
 
   fetchImoveis: () => Promise<void>;
   fetchBenchmarks: () => Promise<void>;
@@ -20,6 +35,7 @@ interface AppState {
   criarImovel: (data: Record<string, unknown>) => Promise<void>;
   atualizarImovel: (id: string, data: Record<string, unknown>) => Promise<void>;
   deletarImovel: (id: string) => Promise<void>;
+  toggleTheme: () => void;
 }
 
 let nextDemoId = 100;
@@ -65,6 +81,9 @@ function flatToImovel(data: Record<string, unknown>): Imovel {
   };
 }
 
+const initialTheme = getInitialTheme();
+applyTheme(initialTheme);
+
 export const useStore = create<AppState>((set, get) => ({
   imoveis: [],
   selectedId: null,
@@ -72,6 +91,7 @@ export const useStore = create<AppState>((set, get) => ({
   isLoading: false,
   error: null,
   isDemo: DEMO_MODE,
+  theme: initialTheme,
 
   fetchImoveis: async () => {
     set({ isLoading: true, error: null });
@@ -162,5 +182,11 @@ export const useStore = create<AppState>((set, get) => ({
     const { selectedId } = get();
     if (selectedId === id) set({ selectedId: null });
     await get().fetchImoveis();
+  },
+
+  toggleTheme: () => {
+    const next = get().theme === 'light' ? 'dark' : 'light';
+    applyTheme(next);
+    set({ theme: next });
   },
 }));
