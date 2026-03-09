@@ -1,4 +1,4 @@
-import type { Imovel, Benchmarks } from '../types';
+import type { Imovel, Benchmarks, SnapshotMensal } from '../types';
 
 export const MOCK_BENCHMARKS: Benchmarks = {
   selicAnual: 13.25,
@@ -7,6 +7,83 @@ export const MOCK_BENCHMARKS: Benchmarks = {
   poupancaAnual: 6.17,
   financiamentoTx: 10.49,
 };
+
+// Helper: generate monthly snapshots from purchase to today
+function gerarSnapshots(
+  dataCompra: string,
+  valorCompra: number,
+  valorAtual: number,
+  financiamento?: { valorFinanciado: number; taxaJurosAnual: number; prazoMeses: number; sistema: 'SAC' | 'PRICE' },
+  aluguelMensal?: number,
+  vacanciaPct: number = 0,
+): SnapshotMensal[] {
+  const start = new Date(dataCompra);
+  const now = new Date();
+  const snapshots: SnapshotMensal[] = [];
+
+  const totalMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (totalMonths <= 0) return [];
+
+  const taxaMensal = financiamento ? financiamento.taxaJurosAnual / 100 / 12 : 0;
+  const amortMensal = financiamento ? financiamento.valorFinanciado / financiamento.prazoMeses : 0;
+  let saldoDevedor = financiamento?.valorFinanciado ?? 0;
+
+  for (let m = 0; m <= totalMonths; m++) {
+    const d = new Date(start.getFullYear(), start.getMonth() + m, 1);
+    const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+    // Smooth interpolation with slight randomness for realism
+    const t = m / totalMonths;
+    const curve = t * t * (3 - 2 * t); // smoothstep
+    const valorEstimado = Math.round(valorCompra + (valorAtual - valorCompra) * curve);
+
+    // Amortization (SAC simplified)
+    if (financiamento && saldoDevedor > 0) {
+      const juros = saldoDevedor * taxaMensal;
+      if (financiamento.sistema === 'SAC') {
+        saldoDevedor = Math.max(0, saldoDevedor - amortMensal);
+      } else {
+        // PRICE: constant payment
+        const pmt = financiamento.valorFinanciado * (taxaMensal * Math.pow(1 + taxaMensal, financiamento.prazoMeses)) / (Math.pow(1 + taxaMensal, financiamento.prazoMeses) - 1);
+        const amort = pmt - juros;
+        saldoDevedor = Math.max(0, saldoDevedor - amort);
+      }
+    }
+
+    const equity = valorEstimado - Math.round(saldoDevedor);
+    const aluguel = aluguelMensal ? Math.round(aluguelMensal * (1 - vacanciaPct / 100)) : 0;
+
+    snapshots.push({
+      data: mes,
+      valorEstimado,
+      saldoDevedor: Math.round(saldoDevedor),
+      equity,
+      aluguelRecebido: aluguel,
+    });
+  }
+
+  return snapshots;
+}
+
+// Helper: generate monthly value history
+function gerarHistorico(dataCompra: string, valorCompra: number, valorAtual: number): { data: string; valor: number }[] {
+  const start = new Date(dataCompra);
+  const now = new Date();
+  const totalMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  const result: { data: string; valor: number }[] = [];
+
+  for (let m = 0; m <= totalMonths; m++) {
+    const d = new Date(start.getFullYear(), start.getMonth() + m, 1);
+    const t = m / Math.max(totalMonths, 1);
+    const curve = t * t * (3 - 2 * t);
+    result.push({
+      data: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      valor: Math.round(valorCompra + (valorAtual - valorCompra) * curve),
+    });
+  }
+
+  return result;
+}
 
 export const MOCK_IMOVEIS: Imovel[] = [
   {
@@ -19,6 +96,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
       bairro: 'Pinheiros',
       cidade: 'São Paulo',
       uf: 'SP',
+      latitude: -23.5613,
+      longitude: -46.6920,
     },
     areaUtil: 70,
     quartos: 2,
@@ -42,6 +121,16 @@ export const MOCK_IMOVEIS: Imovel[] = [
     },
     valorAtualEstimado: 830_000,
     fonteAvaliacao: 'FipeZAP',
+    financiamento: {
+      valorFinanciado: 500_000,
+      taxaJurosAnual: 9.5,
+      prazoMeses: 360,
+      sistema: 'SAC',
+      saldoDevedor: 465_000,
+      banco: 'Caixa',
+    },
+    historicoValores: gerarHistorico('2022-06-01', 750_000, 830_000),
+    snapshots: gerarSnapshots('2022-06-01', 750_000, 830_000, { valorFinanciado: 500_000, taxaJurosAnual: 9.5, prazoMeses: 360, sistema: 'SAC' }, 4_200, 5),
   },
   {
     id: '2',
@@ -53,6 +142,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
       bairro: 'Vila Madalena',
       cidade: 'São Paulo',
       uf: 'SP',
+      latitude: -23.5535,
+      longitude: -46.6910,
     },
     areaUtil: 35,
     quartos: 1,
@@ -76,6 +167,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
     },
     valorAtualEstimado: 445_000,
     fonteAvaliacao: 'FipeZAP',
+    historicoValores: gerarHistorico('2023-03-15', 420_000, 445_000),
+    snapshots: gerarSnapshots('2023-03-15', 420_000, 445_000, undefined, 4_500, 0),
   },
   {
     id: '3',
@@ -87,6 +180,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
       bairro: 'Copacabana',
       cidade: 'Rio de Janeiro',
       uf: 'RJ',
+      latitude: -22.9711,
+      longitude: -43.1863,
     },
     areaUtil: 85,
     quartos: 3,
@@ -108,6 +203,16 @@ export const MOCK_IMOVEIS: Imovel[] = [
     },
     valorAtualEstimado: 720_000,
     fonteAvaliacao: 'FipeZAP',
+    financiamento: {
+      valorFinanciado: 450_000,
+      taxaJurosAnual: 10.2,
+      prazoMeses: 240,
+      sistema: 'PRICE',
+      saldoDevedor: 395_000,
+      banco: 'Itaú',
+    },
+    historicoValores: gerarHistorico('2021-09-10', 680_000, 720_000),
+    snapshots: gerarSnapshots('2021-09-10', 680_000, 720_000, { valorFinanciado: 450_000, taxaJurosAnual: 10.2, prazoMeses: 240, sistema: 'PRICE' }, 3_800, 8),
   },
   {
     id: '4',
@@ -119,6 +224,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
       bairro: 'Itaim Bibi',
       cidade: 'São Paulo',
       uf: 'SP',
+      latitude: -23.5868,
+      longitude: -46.6803,
     },
     areaUtil: 45,
     quartos: 0,
@@ -142,6 +249,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
     },
     valorAtualEstimado: 590_000,
     fonteAvaliacao: 'FipeZAP',
+    historicoValores: gerarHistorico('2020-11-20', 520_000, 590_000),
+    snapshots: gerarSnapshots('2020-11-20', 520_000, 590_000, undefined, 3_500, 10),
   },
   {
     id: '5',
@@ -153,6 +262,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
       bairro: 'Lagoa da Conceição',
       cidade: 'Florianópolis',
       uf: 'SC',
+      latitude: -27.6046,
+      longitude: -48.4760,
     },
     areaUtil: 120,
     quartos: 3,
@@ -178,6 +289,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
     },
     valorAtualEstimado: 1_080_000,
     fonteAvaliacao: 'FipeZAP',
+    historicoValores: gerarHistorico('2023-01-10', 950_000, 1_080_000),
+    snapshots: gerarSnapshots('2023-01-10', 950_000, 1_080_000, undefined, 7_500, 0),
   },
   {
     id: '6',
@@ -189,6 +302,8 @@ export const MOCK_IMOVEIS: Imovel[] = [
       bairro: 'Centro',
       cidade: 'Belo Horizonte',
       uf: 'MG',
+      latitude: -19.9191,
+      longitude: -43.9387,
     },
     areaUtil: 28,
     quartos: 1,
@@ -210,5 +325,7 @@ export const MOCK_IMOVEIS: Imovel[] = [
     },
     valorAtualEstimado: 195_000,
     fonteAvaliacao: 'FipeZAP',
+    historicoValores: gerarHistorico('2024-02-28', 185_000, 195_000),
+    snapshots: gerarSnapshots('2024-02-28', 185_000, 195_000, undefined, 1_200, 6),
   },
 ];

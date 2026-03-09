@@ -878,4 +878,219 @@
     flex-wrap: wrap;
     gap: 8px;
   }
+
+  .evolution-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .map-filters {
+    flex-wrap: wrap;
+  }
+}
+
+/* === Map Filters === */
+.map-filters {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.map-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-filter-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.map-filter-group select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  background: #f8fafc;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+/* === Map Legend === */
+.map-legend {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  z-index: 1000;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  font-size: 11px;
+}
+
+.map-legend-title {
+  font-weight: 600;
+  color: #334155;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.map-legend-items {
+  display: flex;
+  gap: 10px;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.map-container {
+  position: relative;
+}
+
+/* === Card Financing === */
+.card-financing {
+  padding: 8px 0;
+  border-top: 1px solid #f1f5f9;
+  font-size: 0.8em;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.financing-label {
+  font-weight: 600;
+  color: #475569;
+}
+
+.financing-detail {
+  color: #94a3b8;
+}
+
+/* === Benchmark Toggle === */
+.benchmark-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.benchmark-toggle button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 12px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.15s;
+}
+
+.benchmark-toggle button.active {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.benchmark-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 8px 0;
+}
+
+.benchmark-breakdown {
+  padding: 4px 8px;
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+/* === Evolution Page === */
+.evolution-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.evolution-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.evolution-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.evo-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.evo-card > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.evo-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.evo-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.evolution-chart-section {
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: 16px;
+}
+
+.evolution-chart-section h4 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  color: #1e293b;
+}
+
+.chart-description {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0 0 12px 0;
+}
+
+.evolution-empty {
+  padding: 40px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.equity-debt-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }

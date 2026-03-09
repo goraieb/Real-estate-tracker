@@ -1,37 +1,42 @@
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Plus, Loader2, List, Map, Calculator } from 'lucide-react';
+import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info } from 'lucide-react';
 import { PropertyCard } from './components/PropertyCard';
 import { PropertyMap } from './components/PropertyMap';
+import { MapFilters } from './components/MapFilters';
 import { YieldBreakdown } from './components/YieldBreakdown';
 import { BenchmarkChart } from './components/BenchmarkChart';
 import { PortfolioSummary } from './components/PortfolioSummary';
+import { PortfolioEvolution } from './components/PortfolioEvolution';
+import { EquityDebtChart } from './components/EquityDebtChart';
 import { PropertyForm } from './components/PropertyForm';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { FinancingSimulator } from './components/FinancingSimulator';
 import { useStore } from './store/useStore';
-import { calcularValorizacao, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
+import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
+import { MOCK_MARKET_DATA } from './services/mockMarketData';
 import { TAXA_ADMINISTRACAO_PCT } from './config';
-import type { Imovel } from './types';
-import { Info } from 'lucide-react';
+import type { Imovel, MapFilter } from './types';
 import './App.css';
 
-function getYield(imovel: Imovel): number {
+function getYields(imovel: Imovel): { yieldBruto: number; yieldLiquido: number } {
   const val = calcularValorizacao(imovel);
   if (imovel.renda.tipo === 'airbnb' && imovel.renda.diariaMedia && imovel.renda.taxaOcupacaoPct) {
     const custoFixo = imovel.custos.condominioMensal + imovel.custos.iptuAnual / 12;
-    return calcularYieldAirbnb(val.valorAtual, imovel.renda.diariaMedia, imovel.renda.taxaOcupacaoPct, custoFixo).yieldLiquido;
+    const res = calcularYieldAirbnb(val.valorAtual, imovel.renda.diariaMedia, imovel.renda.taxaOcupacaoPct, custoFixo);
+    return { yieldBruto: res.yieldBruto, yieldLiquido: res.yieldLiquido };
   }
   if (imovel.renda.aluguelMensal) {
-    return calcularYieldLongterm(
+    const res = calcularYieldLongterm(
       val.valorAtual, imovel.renda.aluguelMensal, imovel.custos.iptuAnual,
       imovel.custos.condominioMensal, imovel.custos.seguroAnual, imovel.custos.manutencaoMensal,
       TAXA_ADMINISTRACAO_PCT, imovel.renda.taxaVacanciaPct,
-    ).yieldLiquido;
+    );
+    return { yieldBruto: res.yieldBruto, yieldLiquido: res.yieldLiquido };
   }
-  return 0;
+  return { yieldBruto: 0, yieldLiquido: 0 };
 }
 
-type AppTab = 'dashboard' | 'simulator';
+type AppTab = 'dashboard' | 'evolution' | 'simulator';
 
 function App() {
   const {
@@ -45,6 +50,7 @@ function App() {
   const [deleteTarget, setDeleteTarget] = useState<Imovel | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
+  const [mapFilter, setMapFilter] = useState<MapFilter>({ tipo: 'todos', condicao: 'todos', quartos: 'todos' });
 
   useEffect(() => {
     fetchImoveis();
@@ -52,7 +58,8 @@ function App() {
   }, [fetchImoveis, fetchBenchmarks]);
 
   const selected = imoveis.find(i => i.id === selectedId) ?? null;
-  const selectedYield = selected ? getYield(selected) : 0;
+  const selectedYields = selected ? getYields(selected) : { yieldBruto: 0, yieldLiquido: 0 };
+  const selectedVd = selected ? calcularValorizacaoDetalhada(selected, benchmarks) : null;
 
   function handleAdd() {
     setEditingImovel(null);
@@ -117,6 +124,10 @@ function App() {
           <LayoutDashboard size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
           Dashboard
         </button>
+        <button className={`app-tab ${activeTab === 'evolution' ? 'active' : ''}`} onClick={() => setActiveTab('evolution')}>
+          <TrendingUp size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
+          Evolução
+        </button>
         <button className={`app-tab ${activeTab === 'simulator' ? 'active' : ''}`} onClick={() => setActiveTab('simulator')}>
           <Calculator size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
           Simulador
@@ -127,6 +138,11 @@ function App() {
         <FinancingSimulator
           valorImovelInicial={selected?.compra.valorCompra}
         />
+      ) : activeTab === 'evolution' ? (
+        <div className="evolution-page">
+          <PortfolioEvolution imoveis={imoveis} benchmarks={benchmarks} />
+          <EquityDebtChart imoveis={imoveis} benchmarks={benchmarks} />
+        </div>
       ) : (
         <>
           {/* Portfolio Summary */}
@@ -134,11 +150,16 @@ function App() {
 
           {/* Map view */}
           {viewMode === 'map' && (
-            <PropertyMap
-              imoveis={imoveis}
-              selectedId={selectedId}
-              onSelectImovel={selectImovel}
-            />
+            <>
+              <MapFilters filtro={mapFilter} onChange={setMapFilter} />
+              <PropertyMap
+                imoveis={imoveis}
+                selectedId={selectedId}
+                onSelectImovel={selectImovel}
+                dadosMercado={MOCK_MARKET_DATA}
+                filtro={mapFilter}
+              />
+            </>
           )}
 
           {/* Main content */}
@@ -167,6 +188,7 @@ function App() {
                     <PropertyCard
                       key={imovel.id}
                       imovel={imovel}
+                      benchmarks={benchmarks}
                       onClick={() => selectImovel(imovel.id)}
                       onEdit={() => handleEdit(imovel)}
                       onDelete={() => setDeleteTarget(imovel)}
@@ -184,10 +206,13 @@ function App() {
                   <YieldBreakdown imovel={selected} />
                   {benchmarks?.selicAnual && benchmarks?.ipca12m && (
                     <BenchmarkChart
-                      yieldImovel={selectedYield}
+                      yieldBruto={selectedYields.yieldBruto}
+                      yieldLiquido={selectedYields.yieldLiquido}
+                      valorizacao12mPct={selectedVd?.ultimos12mPct ?? 0}
                       selicAnual={benchmarks.selicAnual}
                       ipca12m={benchmarks.ipca12m}
                       nomeImovel={selected.nome}
+                      benchmarksData={benchmarks}
                     />
                   )}
                 </>
