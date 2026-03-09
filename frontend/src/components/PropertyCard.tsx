@@ -8,24 +8,30 @@ import {
   Ruler,
   Pencil,
   Trash2,
+  Calendar,
+  Landmark,
 } from 'lucide-react';
-import type { Imovel } from '../types';
+import type { Imovel, Benchmarks } from '../types';
 import { usePropertyMetrics } from '../hooks/usePropertyMetrics';
+import { calcularValorizacaoDetalhada } from '../services/calculations';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+const fmtPp = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}pp`;
 
 interface Props {
   imovel: Imovel;
+  benchmarks?: Benchmarks | null;
   onClick?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }
 
-export function PropertyCard({ imovel, onClick, onEdit, onDelete }: Props) {
+export function PropertyCard({ imovel, benchmarks, onClick, onEdit, onDelete }: Props) {
   const val = usePropertyMetrics(imovel);
   const { yieldLiquido, receitaMensal } = val;
   const isPositive = val.valorizacaoPct >= 0;
+  const vd = calcularValorizacaoDetalhada(imovel, benchmarks ?? null);
 
   return (
     <div className="card" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
@@ -76,11 +82,39 @@ export function PropertyCard({ imovel, onClick, onEdit, onDelete }: Props) {
           <span className="label">Valor atual</span>
           <span className="value value-highlight">{fmt(val.valorAtual)}</span>
         </div>
+
+        {/* Detailed appreciation */}
         <div className="value-row">
-          <span className="label">Valorização</span>
-          <span className={`value ${isPositive ? 'positive' : 'negative'}`}>
+          <span className="label">
+            <Calendar size={12} style={{ verticalAlign: 'text-bottom', marginRight: 2 }} />
+            Acumulada ({vd.mesesDesdeCompra}m)
+          </span>
+          <span className={`value ${vd.acumuladoPct >= 0 ? 'positive' : 'negative'}`}>
             {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            {fmtPct(val.valorizacaoPct)} ({fmt(val.ganhoNominal)})
+            {fmtPct(vd.acumuladoPct)} ({fmt(vd.acumuladoReais)})
+          </span>
+        </div>
+        <div className="value-row">
+          <span className="label">Últimos 12m</span>
+          <span className={`value ${vd.ultimos12mPct >= 0 ? 'positive' : 'negative'}`}>
+            {fmtPct(vd.ultimos12mPct)} ({fmt(vd.ultimos12mReais)})
+          </span>
+        </div>
+
+        {/* Comparison with benchmarks */}
+        <div className="value-row" style={{ fontSize: '0.8em', opacity: 0.85 }}>
+          <span className="label">
+            <Landmark size={12} style={{ verticalAlign: 'text-bottom', marginRight: 2 }} />
+            vs SELIC
+          </span>
+          <span className={`value ${vd.alphaVsSelicPct >= 0 ? 'positive' : 'negative'}`}>
+            {fmtPp(vd.alphaVsSelicPct)}
+          </span>
+        </div>
+        <div className="value-row" style={{ fontSize: '0.8em', opacity: 0.85 }}>
+          <span className="label">vs IPCA+6%</span>
+          <span className={`value ${vd.alphaVsIpcaPct >= 0 ? 'positive' : 'negative'}`}>
+            {fmtPp(vd.alphaVsIpcaPct)}
           </span>
         </div>
       </div>
@@ -95,6 +129,18 @@ export function PropertyCard({ imovel, onClick, onEdit, onDelete }: Props) {
           <span>Receita líq. mensal: {fmt(receitaMensal)}</span>
         </div>
       </div>
+
+      {/* Financing info */}
+      {imovel.financiamento && (
+        <div className="card-financing">
+          <span className="financing-label">
+            {imovel.financiamento.sistema} — {imovel.financiamento.banco ?? 'Banco'}
+          </span>
+          <span className="financing-detail">
+            Dívida: {fmt(imovel.financiamento.saldoDevedor ?? 0)} | {imovel.financiamento.taxaJurosAnual}% a.a.
+          </span>
+        </div>
+      )}
 
       {/* Source */}
       {imovel.fonteAvaliacao && (

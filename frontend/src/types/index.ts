@@ -7,6 +7,8 @@ export interface Endereco {
   bairro: string;
   cidade: string;
   uf: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface DadosCompra {
@@ -34,6 +36,62 @@ export interface DadosRenda {
   custosPlataformaPct?: number;
 }
 
+export interface DadosFinanciamento {
+  valorFinanciado: number;
+  taxaJurosAnual: number;
+  prazoMeses: number;
+  sistema: 'SAC' | 'PRICE';
+  saldoDevedor?: number;
+  banco?: string;
+}
+
+export interface SnapshotMensal {
+  data: string;           // "2024-01"
+  valorEstimado: number;
+  saldoDevedor: number;   // 0 se à vista
+  equity: number;         // valor - saldo_devedor
+  aluguelRecebido: number;
+}
+
+export interface ValorizacaoDetalhada {
+  acumuladoPct: number;
+  acumuladoReais: number;
+  ultimos12mPct: number;
+  ultimos12mReais: number;
+  mesesDesdeCompra: number;
+  selicAcumuladaPct: number;
+  ipcaMais6AcumuladaPct: number;
+  selic12mPct: number;
+  ipcaMais6_12mPct: number;
+  alphaVsSelicPct: number;
+  alphaVsIpcaPct: number;
+}
+
+export interface DadosMercadoBairro {
+  bairro: string;
+  cidade: string;
+  uf: string;
+  centroLat: number;
+  centroLng: number;
+  precoM2Atual: number;
+  precoM2_12mAtras: number;
+  variacaoPct12m: number;
+  porTipo: {
+    tipo: 'apartamento' | 'casa';
+    condicao: 'novo' | 'usado';
+    quartos: number;
+    precoM2: number;
+    variacaoPct12m: number;
+    amostra: number;
+  }[];
+}
+
+export interface MapFilter {
+  tipo: 'apartamento' | 'casa' | 'todos';
+  condicao: 'novo' | 'usado' | 'todos';
+  quartos: number | 'todos'; // 1,2,3,4 or 'todos'
+}
+
 export interface Imovel {
   id: string;
   nome: string;
@@ -47,6 +105,9 @@ export interface Imovel {
   renda: DadosRenda;
   valorAtualEstimado?: number;
   fonteAvaliacao?: string;
+  financiamento?: DadosFinanciamento;
+  historicoValores?: { data: string; valor: number }[];
+  snapshots?: SnapshotMensal[];
 }
 
 export interface YieldResult {
