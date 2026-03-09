@@ -12,6 +12,7 @@ import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
 import { TAXA_ADMINISTRACAO_PCT } from './config';
 import type { Imovel } from './types';
+import { Info } from 'lucide-react';
 import './App.css';
 
 function getYield(imovel: Imovel): number {
@@ -34,7 +35,7 @@ type AppTab = 'dashboard' | 'simulator';
 
 function App() {
   const {
-    imoveis, selectedId, benchmarks, isLoading, error,
+    imoveis, selectedId, benchmarks, isLoading, error, isDemo,
     fetchImoveis, fetchBenchmarks, selectImovel,
     criarImovel, atualizarImovel, deletarImovel,
   } = useStore();
@@ -80,6 +81,12 @@ function App() {
 
   return (
     <div className="app">
+      {isDemo && (
+        <div className="demo-banner">
+          <Info size={16} />
+          <span>Modo demonstração — dados fictícios, alterações não são salvas</span>
+        </div>
+      )}
       {/* Header */}
       <header className="app-header">
         <div className="header-left">
