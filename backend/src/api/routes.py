@@ -21,6 +21,7 @@ from ..database.repository import ImovelRepository
 from ..services.yield_calc import YieldService
 from ..services.benchmark import BenchmarkService
 from ..services.financing import FinancingService
+from .market_routes import router as market_router
 
 app = FastAPI(
     title="Real Estate Tracker API",
@@ -44,6 +45,9 @@ yield_service = YieldService()
 benchmark_service = BenchmarkService()
 financing_service = FinancingService()
 repo = ImovelRepository()
+
+
+app.include_router(market_router)
 
 
 @app.on_event("startup")

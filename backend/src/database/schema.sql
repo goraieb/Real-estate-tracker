@@ -63,3 +63,53 @@ CREATE TABLE IF NOT EXISTS imoveis (
 CREATE INDEX IF NOT EXISTS idx_imoveis_cidade ON imoveis(cidade);
 CREATE INDEX IF NOT EXISTS idx_imoveis_bairro ON imoveis(bairro);
 CREATE INDEX IF NOT EXISTS idx_imoveis_tipo ON imoveis(tipo);
+
+-- ============================================
+-- ITBI TRANSACTIONS (Market Explorer)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS transacoes_itbi (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cidade TEXT NOT NULL DEFAULT 'São Paulo',
+    bairro TEXT,
+    logradouro TEXT,
+    numero TEXT,
+    sql_cadastral TEXT,
+    tipo_imovel TEXT,
+    area_construida REAL,
+    area_terreno REAL,
+    valor_transacao REAL NOT NULL,
+    preco_m2 REAL,
+    data_transacao TEXT NOT NULL,
+    latitude REAL,
+    longitude REAL,
+    geocoded INTEGER DEFAULT 0,
+    fonte TEXT DEFAULT 'prefeitura_sp',
+    criado_em TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_transacoes_cidade ON transacoes_itbi(cidade);
+CREATE INDEX IF NOT EXISTS idx_transacoes_bairro ON transacoes_itbi(bairro);
+CREATE INDEX IF NOT EXISTS idx_transacoes_data ON transacoes_itbi(data_transacao);
+CREATE INDEX IF NOT EXISTS idx_transacoes_geo ON transacoes_itbi(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_transacoes_preco ON transacoes_itbi(preco_m2);
+
+CREATE TABLE IF NOT EXISTS geocode_cache (
+    endereco_normalizado TEXT PRIMARY KEY,
+    latitude REAL,
+    longitude REAL,
+    provider TEXT DEFAULT 'nominatim',
+    criado_em TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS market_alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT NOT NULL,
+    bairro TEXT,
+    logradouro TEXT,
+    preco_m2_limite REAL,
+    yield_limite REAL,
+    ativo INTEGER DEFAULT 1,
+    ultimo_disparo TEXT,
+    criado_em TEXT DEFAULT (datetime('now'))
+);

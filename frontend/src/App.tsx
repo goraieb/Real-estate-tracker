@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info, Sun, Moon, Search } from 'lucide-react';
 import { PropertyCard } from './components/PropertyCard';
 import { PropertyMap } from './components/PropertyMap';
 import { MapFilters } from './components/MapFilters';
@@ -11,6 +11,7 @@ import { EquityDebtChart } from './components/EquityDebtChart';
 import { PropertyForm } from './components/PropertyForm';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { FinancingSimulator } from './components/FinancingSimulator';
+import { MarketExplorer } from './components/MarketExplorer';
 import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
 import { MOCK_MARKET_DATA } from './services/mockMarketData';
@@ -36,7 +37,7 @@ function getYields(imovel: Imovel): { yieldBruto: number; yieldLiquido: number }
   return { yieldBruto: 0, yieldLiquido: 0 };
 }
 
-type AppTab = 'dashboard' | 'evolution' | 'simulator';
+type AppTab = 'dashboard' | 'evolution' | 'simulator' | 'market';
 
 function App() {
   const {
@@ -135,9 +136,15 @@ function App() {
           <Calculator size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
           Simulador
         </button>
+        <button className={`app-tab ${activeTab === 'market' ? 'active' : ''}`} onClick={() => setActiveTab('market')}>
+          <Search size={16} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
+          Explorador de Mercado
+        </button>
       </div>
 
-      {activeTab === 'simulator' ? (
+      {activeTab === 'market' ? (
+        <MarketExplorer userProperties={imoveis} />
+      ) : activeTab === 'simulator' ? (
         <FinancingSimulator
           valorImovelInicial={selected?.compra.valorCompra}
         />
