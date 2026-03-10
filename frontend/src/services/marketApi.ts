@@ -1,6 +1,9 @@
 /**
  * API client for market explorer endpoints.
  * Falls back to mock data when the backend is unavailable.
+ *
+ * Tracks data source ("database" for real data, "mock" for demo data)
+ * so the UI can indicate whether the user is viewing real ITBI transactions.
  */
 
 import type {
@@ -26,7 +29,81 @@ async function fetchJson<T>(url: string): Promise<T> {
   return resp.json();
 }
 
+/** Metadata about the data source for the last fetch. */
+export interface DataSourceInfo {
+  source: 'database' | 'mock';
+  total: number;
+  filtered?: number;
+  minDate?: string | null;
+  maxDate?: string | null;
+}
+
+/** Tracks the latest data source info (updated by fetchTransactions). */
+let _lastDataSource: DataSourceInfo = {
+  source: 'mock',
+  total: MOCK_TRANSACTIONS.length,
+};
+
+export function getDataSourceInfo(): DataSourceInfo {
+  return _lastDataSource;
+}
+
+// --- Transaction Count ---
+
+export async function fetchTransactionCount(params: {
+  bbox?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  tipo?: string;
+  precoM2Min?: number;
+  precoM2Max?: number;
+  bairro?: string;
+} = {}): Promise<DataSourceInfo> {
+  try {
+    const qs = new URLSearchParams();
+    if (params.bbox) qs.set('bbox', params.bbox);
+    if (params.dataInicio) qs.set('data_inicio', params.dataInicio);
+    if (params.dataFim) qs.set('data_fim', params.dataFim);
+    if (params.tipo) qs.set('tipo', params.tipo);
+    if (params.precoM2Min) qs.set('preco_m2_min', String(params.precoM2Min));
+    if (params.precoM2Max) qs.set('preco_m2_max', String(params.precoM2Max));
+    if (params.bairro) qs.set('bairro', params.bairro);
+
+    const data = await fetchJson<{
+      filtered: number;
+      total: number;
+      minDate: string | null;
+      maxDate: string | null;
+      source: string;
+    }>(`/api/v1/market/transactions/count?${qs}`);
+
+    const info: DataSourceInfo = {
+      source: 'database',
+      total: data.total,
+      filtered: data.filtered,
+      minDate: data.minDate,
+      maxDate: data.maxDate,
+    };
+    _lastDataSource = info;
+    return info;
+  } catch {
+    const info: DataSourceInfo = {
+      source: 'mock',
+      total: MOCK_TRANSACTIONS.length,
+      filtered: MOCK_TRANSACTIONS.length,
+    };
+    _lastDataSource = info;
+    return info;
+  }
+}
+
 // --- Transactions ---
+
+export interface TransactionResult {
+  transactions: TransacaoITBI[];
+  total: number;
+  source: 'database' | 'mock';
+}
 
 export async function fetchTransactions(params: {
   bbox?: string;
@@ -37,6 +114,7 @@ export async function fetchTransactions(params: {
   precoM2Max?: number;
   bairro?: string;
   limit?: number;
+  offset?: number;
 }): Promise<TransacaoITBI[]> {
   try {
     const qs = new URLSearchParams();
@@ -48,10 +126,19 @@ export async function fetchTransactions(params: {
     if (params.precoM2Max) qs.set('preco_m2_max', String(params.precoM2Max));
     if (params.bairro) qs.set('bairro', params.bairro);
     if (params.limit) qs.set('limit', String(params.limit));
+    if (params.offset) qs.set('offset', String(params.offset));
 
-    const geojson = await fetchJson<{ features: Array<{ properties: TransacaoITBI; geometry: { coordinates: [number, number] } }> }>(
-      `/api/v1/market/transactions?${qs}`
-    );
+    const geojson = await fetchJson<{
+      features: Array<{ properties: TransacaoITBI; geometry: { coordinates: [number, number] } }>;
+      total?: number;
+      source?: string;
+    }>(`/api/v1/market/transactions?${qs}`);
+
+    _lastDataSource = {
+      source: 'database',
+      total: geojson.total ?? geojson.features.length,
+    };
+
     return geojson.features.map(f => ({
       ...f.properties,
       latitude: f.geometry.coordinates[1],
@@ -65,7 +152,12 @@ export async function fetchTransactions(params: {
     if (params.precoM2Min) data = data.filter(t => t.precoM2 !== null && t.precoM2 >= params.precoM2Min!);
     if (params.precoM2Max) data = data.filter(t => t.precoM2 !== null && t.precoM2 <= params.precoM2Max!);
     if (params.bairro) data = data.filter(t => t.bairro?.toLowerCase().includes(params.bairro!.toLowerCase()));
-    return data.slice(0, params.limit || 5000);
+
+    _lastDataSource = { source: 'mock', total: data.length };
+
+    const start = params.offset || 0;
+    const limit = params.limit || 5000;
+    return data.slice(start, start + limit);
   }
 }
 

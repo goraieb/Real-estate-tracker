@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from 'react-le
 import L from 'leaflet';
 import { Star } from 'lucide-react';
 import type { TransacaoITBI, NeighborhoodStats, YieldBairro, MarketAlert, MarketFilters as FilterType, Imovel, MarketLayer } from '../types';
-import { fetchTransactions, fetchNeighborhoods, fetchYieldMap, fetchMarketStats, fetchAlerts } from '../services/marketApi';
+import { fetchTransactions, fetchNeighborhoods, fetchYieldMap, fetchMarketStats, fetchAlerts, fetchTransactionCount, type DataSourceInfo } from '../services/marketApi';
 import { MarketFilters } from './MarketFilters';
 import { PriceEvolutionChart } from './PriceEvolutionChart';
 import { TimeLapseControls } from './TimeLapseControls';
@@ -51,7 +51,7 @@ function FitTransactions({ transactions }: { transactions: TransacaoITBI[] }) {
 }
 
 const defaultFilters: FilterType = {
-  dataInicio: '2023-01',
+  dataInicio: '2019-01',
   dataFim: '2025-12',
   tipoImovel: [],
   precoM2Min: 0,
@@ -74,6 +74,7 @@ export function MarketExplorer({ userProperties }: Props) {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [showTimeLapse, setShowTimeLapse] = useState(false);
+  const [dataSource, setDataSource] = useState<DataSourceInfo>({ source: 'mock', total: 0 });
 
   const timeLapse = useTimeLapse(filters.dataInicio, filters.dataFim);
 
@@ -81,7 +82,7 @@ export function MarketExplorer({ userProperties }: Props) {
   useEffect(() => {
     async function load() {
       setIsLoading(true);
-      const [txns, nbhd, yld, alertsData, statsData] = await Promise.all([
+      const [txns, nbhd, yld, alertsData, statsData, countData] = await Promise.all([
         fetchTransactions({
           dataInicio: filters.dataInicio ? `${filters.dataInicio}-01` : undefined,
           dataFim: filters.dataFim ? `${filters.dataFim}-28` : undefined,
@@ -92,12 +93,17 @@ export function MarketExplorer({ userProperties }: Props) {
         fetchYieldMap(),
         fetchAlerts(),
         fetchMarketStats(),
+        fetchTransactionCount({
+          dataInicio: filters.dataInicio ? `${filters.dataInicio}-01` : undefined,
+          dataFim: filters.dataFim ? `${filters.dataFim}-28` : undefined,
+        }),
       ]);
       setTransactions(txns);
       setNeighborhoods(nbhd.neighborhoods);
       setYieldData(yld);
       setAlerts(alertsData);
       setStats({ totalTransacoes: statsData.totalTransacoes, precoM2Medio: statsData.precoM2Medio });
+      setDataSource(countData);
       setIsLoading(false);
     }
     load();
@@ -188,6 +194,20 @@ export function MarketExplorer({ userProperties }: Props) {
       </div>
 
       <div className="me-main">
+        {/* Data source indicator */}
+        <div className="me-data-source">
+          <span className={`me-source-badge ${dataSource.source === 'database' ? 'me-source-real' : 'me-source-demo'}`}>
+            {dataSource.source === 'database' ? 'Dados Reais' : 'Demo'}
+          </span>
+          <span className="me-source-count">
+            {dataSource.total.toLocaleString('pt-BR')} transações
+            {dataSource.source === 'database' && dataSource.minDate && dataSource.maxDate && (
+              <> ({dataSource.minDate.slice(0, 4)}–{dataSource.maxDate.slice(0, 4)})</>
+            )}
+            {dataSource.source === 'mock' && <> (2019–2025)</>}
+          </span>
+        </div>
+
         {/* Map */}
         <div className="me-map-container">
           {isLoading && (

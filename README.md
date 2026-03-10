@@ -1,98 +1,139 @@
 # Real Estate Tracker Brasil
 
-App para acompanhar rentabilidade de imóveis no Brasil.
+Plataforma de análise imobiliária para São Paulo com dados reais de transações ITBI, mapa interativo, simulador de financiamento e benchmarks financeiros.
 
-## Visão
+## Funcionalidades
 
-Ferramenta para investidores imobiliários que permite:
+### Explorador de Mercado (ITBI)
+- Mapa interativo com **~1M+ transações reais** da Prefeitura de SP (2019-2025)
+- Clusters por bairro com gradiente de cor por R$/m²
+- Choropleth de preço mediano por bairro
+- Heatmap de yield estimado (aluguel ÷ compra)
+- Time-lapse: animação mensal da evolução de preços
+- Filtros: período, tipo de imóvel, faixa de preço/m², área
+- Indicador "Dados Reais" vs "Demo" com contagem total
 
-- **Acompanhar investimentos**: Cards com valor de compra, valor atualizado, yield, tendência da região, % vacância e ganhos líquidos
-- **Avaliar potenciais investimentos**: Calcular valor de semelhantes na área, valorização ao longo do tempo e rentabilidade projetada
-- **Comparar estratégias**: Aluguel long-term vs. short-term (Airbnb) vs. renda fixa
+### Portfólio de Imóveis
+- Cards com valor de compra, valor atualizado, yield, tendência e ganhos líquidos
+- Evolução patrimonial com gráficos
+- Overlay do portfólio no mapa de mercado (comparação vs mercado)
+- CRUD completo com formulário detalhado
 
-## Funcionalidades Planejadas
+### Análise Financeira
+- Simulador de financiamento (SAC/Price, taxas, FGTS)
+- Yield bruto/líquido (long-term + Airbnb + IR)
+- Benchmark vs Selic/CDI/poupança/Tesouro IPCA+
+- Gráfico equity vs dívida
 
-- Dashboard com cards por imóvel (valor de compra, valor atualizado, yield, ganho líquido)
-- Cálculo de valorização baseado em índices FipeZAP
-- Estimativa de yield de aluguel (long-term e short-term)
-- Tendência da região (dados demográficos IBGE + evolução de preços)
-- Taxa de vacância por região
-- Benchmark vs. Selic/CDI e FIIs
-- Simulador de financiamento
+### UX
+- Dark mode (tema Dracula)
+- Mobile-first responsive
+- Demo mode com ~5K transações mock quando backend indisponível
 
-## Stack Tecnológica
+## Stack
 
-- **Backend**: Python + FastAPI
-- **Frontend**: React
-- **Dados**: PostgreSQL + Redis (cache)
-- **Deploy**: Docker
+| Camada | Tecnologia |
+|--------|-----------|
+| Frontend | React 19 + TypeScript + Vite |
+| Estado | Zustand |
+| Mapas | Leaflet + react-leaflet |
+| Gráficos | Recharts |
+| Backend | Python + FastAPI |
+| Banco | SQLite (aiosqlite) |
+| Geo | GeoPandas + Geobr + Geopy (Nominatim) |
+| Dados | Pandas + NumPy |
 
-## Fontes de Dados
-
-O app alavanca bases de dados públicas do mercado imobiliário brasileiro. Veja o levantamento completo em [`docs/data-sources.md`](docs/data-sources.md).
-
-Principais fontes:
-- **FipeZAP** - Índice de preços de imóveis (venda e locação)
-- **Banco Central (SGS API)** - Selic, IPCA, IGP-M, taxas de financiamento
-- **IBGE API** - Dados demográficos por município
-- **Ipeadata API** - INCC, IGP-M, séries históricas
-- **Inside Airbnb** - Dados de short-term rental
-- **SECOVI-SP** - Taxa de vacância, pesquisa de locação
-
-## Estrutura do Projeto
+## Estrutura
 
 ```
 Real-estate-tracker/
-├── docs/
-│   └── data-sources.md              # Levantamento completo de fontes de dados (837 linhas)
+├── frontend/
+│   └── src/
+│       ├── components/         # 17 componentes React
+│       │   ├── MarketExplorer  # Mapa ITBI com layers, filtros, time-lapse
+│       │   ├── PropertyMap     # Mapa do portfólio
+│       │   ├── PropertyCard    # Card de imóvel com métricas
+│       │   ├── PropertyForm    # Formulário CRUD
+│       │   ├── FinancingSimulator  # Simulador SAC/Price
+│       │   ├── BenchmarkChart  # Gráfico comparativo
+│       │   └── ...
+│       ├── services/           # API clients + mock data
+│       ├── hooks/              # usePropertyMetrics, useThemeColors, useTimeLapse
+│       ├── store/              # Zustand store
+│       └── types/              # TypeScript interfaces
 ├── backend/
-│   ├── requirements.txt
-│   ├── src/
-│   │   ├── data_sources/            # Clientes de dados
-│   │   │   ├── bcb.py               # API BCB SGS (Selic, IPCA, IGP-M, financiamento)
-│   │   │   ├── ibge.py              # API IBGE (municípios, população, malhas GeoJSON)
-│   │   │   ├── ipeadata.py          # API Ipeadata (INCC, IGP-M, séries)
-│   │   │   ├── fipezap.py           # Parser Excel FipeZAP (preço/m² venda e locação)
-│   │   │   ├── insideairbnb.py      # Download/parse Inside Airbnb (SP/RJ)
-│   │   │   └── itbi.py              # Parser ITBI SP (transações reais) + Data.Rio
-│   │   ├── models/
-│   │   │   └── property.py          # Modelo de dados (imóvel, custos, renda, métricas)
-│   │   ├── services/
-│   │   │   ├── valuation.py         # Avaliação de imóvel (valor atualizado, ganho real)
-│   │   │   ├── yield_calc.py        # Yield bruto/líquido (long-term + Airbnb + IR)
-│   │   │   └── benchmark.py         # Benchmark vs Selic/CDI/poupança/Tesouro
-│   │   └── api/
-│   │       └── routes.py            # Endpoints FastAPI
-│   └── tests/
-│       └── test_data_sources.py
-├── notebooks/
-│   └── 01_explore_data.ipynb         # Notebook exploratório
-└── .gitignore
+│   └── src/
+│       ├── api/
+│       │   ├── routes.py           # CRUD imóveis, financiamento, benchmark
+│       │   └── market_routes.py    # Transações ITBI, stats, yield, time-series
+│       ├── data_sources/
+│       │   ├── itbi.py             # Parser ITBI SP/RJ
+│       │   ├── itbi_downloader.py  # Download XLSX Prefeitura SP (2019-2025)
+│       │   ├── bcb.py              # Selic, IPCA, IGP-M (BCB SGS API)
+│       │   ├── fipezap.py          # Preço/m² FipeZAP
+│       │   ├── ibge.py             # Dados demográficos + malhas GeoJSON
+│       │   ├── insideairbnb.py     # Inside Airbnb (SP/RJ)
+│       │   └── ipeadata.py         # INCC, séries históricas
+│       └── services/
+│           ├── valuation.py        # Avaliação de imóvel
+│           ├── yield_calc.py       # Yield bruto/líquido
+│           ├── benchmark.py        # Benchmark vs renda fixa
+│           ├── financing.py        # Simulação de financiamento
+│           └── geocoding.py        # Geocodificação com cache
+└── docs/
+    └── data-sources.md         # Levantamento de 30+ fontes de dados
 ```
-
-## Status
-
-- [x] Fase 1: Pesquisa de fontes de dados (13 categorias, 30+ fontes)
-- [x] Fase 2: Estrutura do projeto + clientes de dados + serviços de cálculo
-- [ ] Fase 3: API FastAPI completa + frontend React
 
 ## Setup
 
 ```bash
-# Clonar o repositório
-git clone <repo-url>
-cd Real-estate-tracker
+# Frontend
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
 
-# Instalar dependências
-pip install -r backend/requirements.txt
-
-# Rodar API
+# Backend
 cd backend
-uvicorn src.api.routes:app --reload
+pip install -r requirements.txt
+uvicorn src.api.routes:app --reload   # http://localhost:8000
 
-# Rodar testes
+# Testes
 pytest backend/tests/
-
-# Rodar notebook exploratório
-jupyter notebook notebooks/01_explore_data.ipynb
 ```
+
+## Carregar Dados Reais ITBI
+
+O app funciona em modo demo sem backend. Para dados reais (~1M+ transações):
+
+```bash
+cd backend
+
+# 1. Baixar XLSX da Prefeitura de SP (2019-2025)
+python -m src.data_sources.itbi_downloader --download-all
+
+# 2. Parsear e inserir no banco
+python -m src.data_sources.itbi_downloader --parse --insert
+
+# 3. Ver estatísticas
+python -m src.data_sources.itbi_downloader --stats
+
+# Anos específicos:
+python -m src.data_sources.itbi_downloader --download-all --years 2023 2024 2025
+
+# Download manual (se URLs mudaram):
+# Baixe de: https://prefeitura.sp.gov.br/web/fazenda/w/acesso_a_informacao/31501
+# Salve em: backend/data/itbi/raw/itbi_YYYY.xlsx
+```
+
+## Fontes de Dados
+
+| Fonte | Dados | Acesso |
+|-------|-------|--------|
+| Prefeitura SP (ITBI) | Transações imobiliárias reais | XLSX público |
+| FipeZAP | Índice de preços venda/locação | Excel público |
+| BCB SGS API | Selic, IPCA, IGP-M, taxas | API REST |
+| IBGE API | Demografia, municípios, malhas | API REST |
+| Inside Airbnb | Dados short-term rental SP/RJ | CSV público |
+| Ipeadata | INCC, séries históricas | API REST |
+
+Detalhes completos em [`docs/data-sources.md`](docs/data-sources.md).

@@ -29,7 +29,7 @@ function generatePeriodos(start: string, end: string): string[] {
 export function useTimeLapse(dataInicio: string, dataFim: string) {
   const [state, setState] = useState<TimeLapseState>({
     isPlaying: false,
-    currentPeriodo: dataInicio || '2023-01',
+    currentPeriodo: dataInicio || '2019-01',
     speed: 1,
     currentTransactions: [],
     allPeriodos: [],
@@ -42,7 +42,7 @@ export function useTimeLapse(dataInicio: string, dataFim: string) {
 
   // Generate periods when date range changes
   useEffect(() => {
-    const start = dataInicio || '2023-01';
+    const start = dataInicio || '2019-01';
     const end = dataFim || '2025-06';
     const periodos = generatePeriodos(start, end);
     setState(s => ({
