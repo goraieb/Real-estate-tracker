@@ -182,8 +182,9 @@ async def batch_geocode(limit: int = 1000):
             lat, lng = await check_cache(db, addr_key)
 
             if lat is None:
-                # Geocode it
-                lat, lng = service.geocode_address(
+                # Geocode it (run in thread to avoid blocking the event loop)
+                lat, lng = await asyncio.to_thread(
+                    service.geocode_address,
                     row["logradouro"],
                     row["numero"],
                     row["bairro"],

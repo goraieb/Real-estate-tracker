@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ..database.db import DB_PATH
+from ..utils.sql_helpers import escape_like
 from ..services.geo_boundaries import (
     SP_BAIRRO_CENTERS,
     get_bairro_center,
@@ -61,13 +62,17 @@ def _build_transaction_filters(
         conditions.extend(["geocoded = 1", "latitude IS NOT NULL", "longitude IS NOT NULL"])
 
     if bbox:
-        parts = [float(x) for x in bbox.split(",")]
-        if len(parts) == 4:
-            lat1, lng1, lat2, lng2 = parts
-            conditions.append("latitude BETWEEN ? AND ?")
-            params.extend([min(lat1, lat2), max(lat1, lat2)])
-            conditions.append("longitude BETWEEN ? AND ?")
-            params.extend([min(lng1, lng2), max(lng1, lng2)])
+        try:
+            parts = [float(x) for x in bbox.split(",")]
+        except ValueError:
+            raise HTTPException(400, "Invalid bbox format. Expected: lat1,lng1,lat2,lng2")
+        if len(parts) != 4:
+            raise HTTPException(400, "bbox must have exactly 4 comma-separated values")
+        lat1, lng1, lat2, lng2 = parts
+        conditions.append("latitude BETWEEN ? AND ?")
+        params.extend([min(lat1, lat2), max(lat1, lat2)])
+        conditions.append("longitude BETWEEN ? AND ?")
+        params.extend([min(lng1, lng2), max(lng1, lng2)])
 
     if data_inicio:
         conditions.append("data_transacao >= ?")
@@ -76,8 +81,8 @@ def _build_transaction_filters(
         conditions.append("data_transacao <= ?")
         params.append(data_fim)
     if tipo:
-        conditions.append("tipo_imovel LIKE ?")
-        params.append(f"%{tipo}%")
+        conditions.append("tipo_imovel LIKE ? ESCAPE '\\'")
+        params.append(f"%{escape_like(tipo)}%")
     if preco_m2_min is not None:
         conditions.append("preco_m2 >= ?")
         params.append(preco_m2_min)
@@ -85,8 +90,8 @@ def _build_transaction_filters(
         conditions.append("preco_m2 <= ?")
         params.append(preco_m2_max)
     if bairro:
-        conditions.append("bairro LIKE ?")
-        params.append(f"%{bairro}%")
+        conditions.append("bairro LIKE ? ESCAPE '\\'")
+        params.append(f"%{escape_like(bairro)}%")
 
     where = " AND ".join(conditions) if conditions else "1=1"
     return where, params
@@ -247,11 +252,27 @@ async def get_neighborhoods():
         bairro_name = row["bairro"]
         center = get_bairro_center(bairro_name) if bairro_name else None
 
+        # Compute real median via OFFSET if the MEDIAN extension wasn't available
+        median_val = None
+        if "preco_m2_mediano" in row.keys():
+            median_val = row["preco_m2_mediano"]
+        elif bairro_name:
+            median_cursor = await db.execute(
+                """SELECT preco_m2 FROM transacoes_itbi
+                WHERE bairro = ? AND preco_m2 BETWEEN 500 AND 150000
+                ORDER BY preco_m2
+                LIMIT 1 OFFSET (SELECT COUNT(*) / 2 FROM transacoes_itbi
+                                 WHERE bairro = ? AND preco_m2 BETWEEN 500 AND 150000)""",
+                (bairro_name, bairro_name),
+            )
+            median_row = await median_cursor.fetchone()
+            median_val = median_row["preco_m2"] if median_row else row["preco_m2_medio"]
+
         entry = {
             "bairro": bairro_name,
             "qtdTransacoes": row["qtd_transacoes"],
             "precoM2Medio": round(row["preco_m2_medio"], 2) if row["preco_m2_medio"] else None,
-            "precoM2Mediano": round(row["preco_m2_medio"], 2) if row["preco_m2_medio"] else None,
+            "precoM2Mediano": round(median_val, 2) if median_val else None,
             "centroLat": center[0] if center else None,
             "centroLng": center[1] if center else None,
         }
@@ -279,10 +300,10 @@ async def get_price_evolution(
                        AVG(preco_m2) as preco_m2_medio,
                        COUNT(*) as qtd_transacoes
             FROM transacoes_itbi
-            WHERE bairro LIKE ? AND preco_m2 BETWEEN 500 AND 150000
+            WHERE bairro LIKE ? ESCAPE '\\' AND preco_m2 BETWEEN 500 AND 150000
             GROUP BY periodo
             ORDER BY periodo""",
-            (f"%{bairro}%",),
+            (f"%{escape_like(bairro)}%",),
         )
         rows = await cursor.fetchall()
 
@@ -311,7 +332,10 @@ async def get_market_stats(
         params: list = []
 
         if bbox:
-            parts = [float(x) for x in bbox.split(",")]
+            try:
+                parts = [float(x) for x in bbox.split(",")]
+            except ValueError:
+                raise HTTPException(400, "Invalid bbox format. Expected: lat1,lng1,lat2,lng2")
             if len(parts) == 4:
                 lat1, lng1, lat2, lng2 = parts
                 conditions.append("latitude BETWEEN ? AND ?")
@@ -513,8 +537,8 @@ async def get_time_series_geo(
         params: list = [periodo]
 
         if tipo:
-            conditions.append("tipo_imovel LIKE ?")
-            params.append(f"%{tipo}%")
+            conditions.append("tipo_imovel LIKE ? ESCAPE '\\'")
+            params.append(f"%{escape_like(tipo)}%")
 
         where = " AND ".join(conditions)
 
@@ -623,9 +647,9 @@ async def check_alerts():
                 cursor = await db.execute(
                     """SELECT AVG(preco_m2) as avg_price
                     FROM transacoes_itbi
-                    WHERE bairro LIKE ? AND preco_m2 BETWEEN 500 AND 150000
+                    WHERE bairro LIKE ? ESCAPE '\\' AND preco_m2 BETWEEN 500 AND 150000
                     AND data_transacao >= date('now', '-30 days')""",
-                    (f"%{alert_dict['bairro']}%",),
+                    (f"%{escape_like(alert_dict['bairro'])}%",),
                 )
                 row = await cursor.fetchone()
                 if (
@@ -1081,8 +1105,8 @@ async def get_real_appreciation(
         ]
         params: list = []
         if bairro:
-            conditions.append("bairro LIKE ?")
-            params.append(f"%{bairro}%")
+            conditions.append("bairro LIKE ? ESCAPE '\\'")
+            params.append(f"%{escape_like(bairro)}%")
 
         where = " AND ".join(conditions)
 

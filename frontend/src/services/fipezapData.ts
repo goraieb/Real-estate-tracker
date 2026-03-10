@@ -485,7 +485,7 @@ export const FIPEZAP_LOCACAO_MENSAL: { date: string; varMensal: number }[] = [
 // --------------------------------------------------------------------------
 // Neighborhood-level data (real FipeZAP bairro values where available)
 // --------------------------------------------------------------------------
-export const MOCK_MARKET_DATA: DadosMercadoBairro[] = [
+export const FIPEZAP_MARKET_DATA: DadosMercadoBairro[] = [
   // ========== São Paulo ==========
   // FipeZAP Dec 2025 bairro ranking (exact values from informe)
   {

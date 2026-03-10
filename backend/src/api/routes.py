@@ -3,6 +3,7 @@
 API REST para consultar dados de mercado, calcular yield, benchmarks e CRUD de imóveis.
 """
 
+import logging
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,8 @@ from ..services.benchmark import BenchmarkService
 from ..services.financing import FinancingService
 from .market_routes import router as market_router
 from .data_routes import router as data_router
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Real Estate Tracker API",
@@ -274,8 +277,11 @@ def get_bcb_serie(
         )
         df = bcb.get_serie(codigo, inicio, fim)
         return df.to_dict(orient="records")
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=400, detail="Invalid date format. Use dd/mm/yyyy")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"BCB serie query failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/api/v1/bcb/{nome}")
@@ -533,20 +539,21 @@ async def opportunity_cost(imovel_id: str):
                     "ganho": round(ifix_counterfactual - valor_compra, 2),
                 }
 
-        # Calculate CDI counterfactual (approximate from Selic)
+        # Calculate CDI counterfactual (compound monthly from Selic series)
         cdi_result = None
         if selic_series:
-            # Use average Selic over the period as CDI proxy
-            avg_selic = sum(r["valor"] for r in selic_series) / len(selic_series)
-            # Approximate number of years
             from datetime import datetime
             try:
                 dt_compra = datetime.strptime(data_compra[:10], "%Y-%m-%d")
                 dt_now = datetime.now()
                 years = (dt_now - dt_compra).days / 365.25
                 if years > 0:
-                    # CDI liquid (15% IR for > 2 years)
-                    cdi_bruto = valor_compra * ((1 + avg_selic / 100) ** years)
+                    # Compound month-by-month using actual Selic rates
+                    cdi_bruto = valor_compra
+                    for entry in selic_series:
+                        taxa_mensal = (1 + entry["valor"] / 100) ** (1 / 12) - 1
+                        cdi_bruto *= (1 + taxa_mensal)
+
                     ir_rate = 0.15 if years > 2 else 0.175 if years > 1 else 0.20 if years > 0.5 else 0.225
                     ganho_bruto = cdi_bruto - valor_compra
                     ganho_liquido = ganho_bruto * (1 - ir_rate)

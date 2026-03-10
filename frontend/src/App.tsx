@@ -18,7 +18,7 @@ import { NeighborhoodScorecard } from './components/NeighborhoodScorecard';
 import { MarketTimingDashboard } from './components/MarketTimingDashboard';
 import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
-import { MOCK_MARKET_DATA } from './services/fipezapData';
+import { FIPEZAP_MARKET_DATA } from './services/fipezapData';
 import { TAXA_ADMINISTRACAO_PCT } from './config';
 import type { Imovel, MapFilter } from './types';
 import './App.css';
@@ -174,7 +174,7 @@ function App() {
                 imoveis={imoveis}
                 selectedId={selectedId}
                 onSelectImovel={selectImovel}
-                dadosMercado={MOCK_MARKET_DATA}
+                dadosMercado={FIPEZAP_MARKET_DATA}
                 filtro={mapFilter}
               />
             </>

@@ -38,11 +38,13 @@ interface AppState {
   toggleTheme: () => void;
 }
 
-let nextDemoId = 100;
+function uniqueDemoId(): string {
+  return `demo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
 
 function flatToImovel(data: Record<string, unknown>): Imovel {
   return {
-    id: String(data.id ?? `demo-${++nextDemoId}`),
+    id: String(data.id ?? uniqueDemoId()),
     nome: String(data.nome ?? ''),
     tipo: (data.tipo as Imovel['tipo']) ?? 'apartamento',
     endereco: {
@@ -158,7 +160,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   criarImovel: async (data) => {
     if (get().isDemo) {
-      const novo = flatToImovel({ ...data, id: `demo-${++nextDemoId}` });
+      const novo = flatToImovel({ ...data, id: uniqueDemoId() });
       const imoveis = [...get().imoveis, novo];
       set({ imoveis, selectedId: novo.id });
       return;

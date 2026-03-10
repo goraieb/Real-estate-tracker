@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from ..database.db import DB_PATH
 from ..services.data_loader import DataLoader
+from ..utils.sql_helpers import escape_like
 
 logger = logging.getLogger(__name__)
 
@@ -72,20 +73,20 @@ async def trigger_data_load(req: LoadRequest, background_tasks: BackgroundTasks)
         raise HTTPException(400, f"Invalid sources: {invalid}. Valid: {valid_sources}")
 
     source_map = {
-        "bcb": loader.load_bcb_indicators(),
-        "ipeadata": loader.load_ipeadata(),
-        "b3": loader.load_b3_ifix(),
-        "abecip": loader.load_abecip(),
-        "cub": loader.load_cub(),
-        "secovi": loader.load_secovi(),
-        "fipezap": loader.load_fipezap(),
-        "airbnb": loader.load_airbnb(),
-        "itbi": loader.load_itbi(years=req.itbi_years),
+        "bcb": loader.load_bcb_indicators,
+        "ipeadata": loader.load_ipeadata,
+        "b3": loader.load_b3_ifix,
+        "abecip": loader.load_abecip,
+        "cub": loader.load_cub,
+        "secovi": loader.load_secovi,
+        "fipezap": loader.load_fipezap,
+        "airbnb": loader.load_airbnb,
+        "itbi": lambda: loader.load_itbi(years=req.itbi_years),
     }
 
     for source in sources:
         if source in source_map:
-            background_tasks.add_task(_run_load, source, source_map[source])
+            background_tasks.add_task(_run_load, source, source_map[source]())
 
     return {
         "message": f"Loading started for: {sources}",
@@ -151,8 +152,8 @@ async def get_indicator_series(
     db = await aiosqlite.connect(DB_PATH)
     db.row_factory = aiosqlite.Row
     try:
-        conditions = ["serie LIKE ?"]
-        params: list = [f"%{serie}%"]
+        conditions = ["serie LIKE ? ESCAPE '\\'"]
+        params: list = [f"%{escape_like(serie)}%"]
 
         if fonte:
             conditions.append("fonte = ?")
@@ -220,8 +221,8 @@ async def get_fipezap_precos(
         params: list = [tipo]
 
         if cidade:
-            conditions.append("cidade LIKE ?")
-            params.append(f"%{cidade}%")
+            conditions.append("cidade LIKE ? ESCAPE '\\'")
+            params.append(f"%{escape_like(cidade)}%")
 
         where = " AND ".join(conditions)
         params.append(limit)
@@ -287,12 +288,12 @@ async def get_airbnb_yield_estimate(
                       AVG(CAST(365 - disponibilidade_365 AS REAL) / 365 * 100) as ocupacao_pct,
                       COUNT(*) as qtd_listings
             FROM airbnb_listings
-            WHERE bairro LIKE ? AND preco_noite > 0 AND preco_noite < 10000""",
-            (f"%{bairro}%",),
+            WHERE bairro LIKE ? ESCAPE '\\' AND preco_noite > 0 AND preco_noite < 10000""",
+            (f"%{escape_like(bairro)}%",),
         )
         airbnb = await cursor.fetchone()
 
-        if not airbnb or not airbnb["preco_medio_noite"]:
+        if not airbnb or not airbnb["preco_medio_noite"] or airbnb["ocupacao_pct"] is None:
             raise HTTPException(404, f"No Airbnb data for '{bairro}'")
 
         # Get purchase price from ITBI if not provided
@@ -300,8 +301,8 @@ async def get_airbnb_yield_estimate(
             cursor = await db.execute(
                 """SELECT AVG(preco_m2) as avg_pm2
                 FROM transacoes_itbi
-                WHERE bairro LIKE ? AND preco_m2 BETWEEN 500 AND 150000""",
-                (f"%{bairro}%",),
+                WHERE bairro LIKE ? ESCAPE '\\' AND preco_m2 BETWEEN 500 AND 150000""",
+                (f"%{escape_like(bairro)}%",),
             )
             itbi = await cursor.fetchone()
             preco_m2_compra = itbi["avg_pm2"] if itbi and itbi["avg_pm2"] else None

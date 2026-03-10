@@ -86,12 +86,13 @@ async def get_indicator_monthly(
         List of {'mes': 'YYYY-MM', 'valor': float}.
     """
     cursor = await db.execute(
-        """SELECT strftime('%Y-%m', data) as mes,
-                  valor
-        FROM indicadores_economicos
-        WHERE fonte = ? AND serie = ?
-        GROUP BY mes
-        HAVING data = MAX(data)
+        """SELECT mes, valor FROM (
+            SELECT strftime('%Y-%m', data) as mes,
+                   valor,
+                   ROW_NUMBER() OVER (PARTITION BY strftime('%Y-%m', data) ORDER BY data DESC) as rn
+            FROM indicadores_economicos
+            WHERE fonte = ? AND serie = ?
+        ) WHERE rn = 1
         ORDER BY mes DESC
         LIMIT ?""",
         (fonte, serie, months),

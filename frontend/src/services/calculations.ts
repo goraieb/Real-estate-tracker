@@ -107,7 +107,7 @@ export function calcularValorizacao(imovel: Imovel): {
   const valorAtual = imovel.valorAtualEstimado ?? imovel.compra.valorCompra;
   const ganhoNominal = valorAtual - imovel.compra.valorCompra;
   const valorizacaoPct = ((valorAtual / imovel.compra.valorCompra) - 1) * 100;
-  const precoM2 = valorAtual / imovel.areaUtil;
+  const precoM2 = imovel.areaUtil > 0 ? valorAtual / imovel.areaUtil : 0;
 
   return { valorAtual, ganhoNominal, valorizacaoPct, precoM2 };
 }

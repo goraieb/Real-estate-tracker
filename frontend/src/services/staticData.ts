@@ -38,7 +38,7 @@ function gerarSnapshots(
   const snapshots: SnapshotMensal[] = [];
 
   const totalMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
-  if (totalMonths <= 0) return [];
+  if (totalMonths < 0) return [];
 
   const taxaMensal = financiamento ? financiamento.taxaJurosAnual / 100 / 12 : 0;
   const amortMensal = financiamento ? financiamento.valorFinanciado / financiamento.prazoMeses : 0;
@@ -48,7 +48,7 @@ function gerarSnapshots(
     const d = new Date(start.getFullYear(), start.getMonth() + m, 1);
     const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-    const t = m / totalMonths;
+    const t = totalMonths > 0 ? m / totalMonths : 1;
     const curve = t * t * (3 - 2 * t); // smoothstep
     const valorEstimado = Math.round(valorCompra + (valorAtual - valorCompra) * curve);
 
