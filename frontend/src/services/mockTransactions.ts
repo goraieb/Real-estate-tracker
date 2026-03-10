@@ -1,6 +1,6 @@
 /**
- * ITBI transaction data for São Paulo — production coverage.
- * ~1,000,000 realistic transactions spread across all 96 official districts (2019-2025).
+ * ITBI transaction data for São Paulo — demo coverage.
+ * ~5,000 realistic transactions spread across all 96 official districts (2019-2025).
  * Used when the backend is not available.
  */
 
@@ -252,8 +252,8 @@ const LOGRADOUROS: Record<string, string[]> = {
   'Vila Curuçá': ['Rua Sete Povos das Missões', 'Rua Antônio de Barros', 'Rua Podalírio'],
 };
 
-// Total target: ~1,000,000 transactions. Weight determines share per neighborhood.
-const TOTAL_TARGET = 1_000_000;
+// Total target: ~5,000 transactions for demo. Weight determines share per neighborhood.
+const TOTAL_TARGET = 5_000;
 
 // Annual appreciation rate by year (simulates real market trends)
 const ANNUAL_APPRECIATION: Record<number, number> = {
@@ -318,7 +318,7 @@ function generateNeighborhoodStats(): NeighborhoodStats[] {
   const rand = seededRandom(123);
   return SP_BAIRROS.map(b => ({
     bairro: b.name,
-    qtdTransacoes: Math.round(b.weight * 4000 + rand() * 2000),
+    qtdTransacoes: Math.round(b.weight * 20 + rand() * 15),
     precoM2Medio: b.precoM2Base,
     precoM2Mediano: Math.round(b.precoM2Base * 0.97),
     centroLat: b.lat,
@@ -334,7 +334,7 @@ function generateYieldData(): YieldBairro[] {
     aluguelM2Estimado: Math.round(b.precoM2Base * b.yieldAnual / 100 / 12 * 100) / 100,
     yieldAnualPct: b.yieldAnual,
     yieldMensalPct: Math.round(b.yieldAnual / 12 * 1000) / 1000,
-    qtdTransacoes: Math.round(b.weight * 4000 + rand() * 2000),
+    qtdTransacoes: Math.round(b.weight * 20 + rand() * 15),
     centroLat: b.lat,
     centroLng: b.lng,
   }));

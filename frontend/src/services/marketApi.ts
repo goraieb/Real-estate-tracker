@@ -162,7 +162,7 @@ export async function fetchTransactions(params: {
       if (params.bairro) data = data.filter(t => t.bairro?.toLowerCase().includes(params.bairro!.toLowerCase()));
       _lastDataSource = { source: 'mock', total: data.length };
       const start = params.offset || 0;
-      const limit = params.limit || 100_000;
+      const limit = params.limit || 10_000;
       return data.slice(start, start + limit);
     }
     _lastDataSource = { source: 'empty', total: 0 };
