@@ -10,7 +10,7 @@ import {
   Legend,
 } from 'recharts';
 import { Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { fetchTimingSignals, type TimingResponse, type TimingSignal } from '../services/marketApi';
+import { fetchTimingSignals, type TimingResponse } from '../services/marketApi';
 import { useThemeColors } from '../hooks/useThemeColors';
 
 function SignalBadge({ composite, score, maxScore }: { composite: string; score: number; maxScore: number }) {
@@ -135,7 +135,7 @@ export function MarketTimingDashboard() {
             <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
             <XAxis dataKey="mes" tick={{ fontSize: 10 }} interval={2} />
             <YAxis tickFormatter={v => `${v}%`} />
-            <Tooltip formatter={(v: number) => [`${v?.toFixed(2) ?? '—'}%`]} />
+            <Tooltip formatter={((v: number) => [`${v?.toFixed(2) ?? '—'}%`]) as any} />
             <Legend />
             <Line type="monotone" dataKey="selic" stroke={tc.green} strokeWidth={2} dot={false} name="Selic" />
             <Line type="monotone" dataKey="taxa_financiamento" stroke={tc.orange} strokeWidth={2} dot={false} name="Financiamento" />
@@ -169,7 +169,7 @@ export function MarketTimingDashboard() {
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="mes" tick={{ fontSize: 10 }} interval={2} />
               <YAxis tickFormatter={v => `${v}a`} />
-              <Tooltip formatter={(v: number) => [`${v?.toFixed(1)} anos`]} />
+              <Tooltip formatter={((v: number) => [`${v?.toFixed(1)} anos`]) as any} />
               <Line type="monotone" dataKey="affordability_years" stroke={tc.red} strokeWidth={2} dot={false} name="Anos de renda" />
             </LineChart>
           </ResponsiveContainer>
