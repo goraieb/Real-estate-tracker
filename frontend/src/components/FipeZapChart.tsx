@@ -10,7 +10,6 @@ import {
   Legend,
   ComposedChart,
   Bar,
-  Area,
 } from 'recharts';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { FIPEZAP_VENDA_MENSAL, FIPEZAP_LOCACAO_MENSAL } from '../services/mockMarketData';
@@ -109,8 +108,8 @@ export function FipeZapChart() {
               <YAxis yAxisId="left" tickFormatter={v => `${v}%`} />
               <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [`${v.toFixed(2)}%`, name]) as any}
               />
               <Legend />
               <Bar yAxisId="left" dataKey="varMensal" fill={tc.cyan} fillOpacity={0.7} name="Var. mensal" />
@@ -128,8 +127,8 @@ export function FipeZapChart() {
               <YAxis yAxisId="left" tickFormatter={v => `${v}%`} />
               <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [`${v.toFixed(2)}%`, name]) as any}
               />
               <Legend />
               <Bar yAxisId="left" dataKey="varMensal" fill={tc.pink} fillOpacity={0.7} name="Var. mensal" />
@@ -146,8 +145,8 @@ export function FipeZapChart() {
               <XAxis dataKey="date" tickFormatter={formatMonth} interval={5} tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => `${v}%`} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [`${v.toFixed(2)}%`, name]) as any}
               />
               <Legend />
               <Line type="monotone" dataKey="vendaAcum12m" stroke={tc.cyan} strokeWidth={2} dot={false} name="Venda 12m" />
@@ -192,7 +191,7 @@ export function FipeZapChart() {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="date" tickFormatter={formatMonth} interval={5} tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={v => `${v}%`} domain={['auto', 'auto']} />
-                <Tooltip labelFormatter={formatMonth} formatter={(v: number) => [`${v?.toFixed(2) ?? '—'}%`]} />
+                <Tooltip labelFormatter={formatMonth as any} formatter={((v: number) => [`${v?.toFixed(2) ?? '—'}%`]) as any} />
                 <Legend />
                 {cityNames.map((city, i) => (
                   <Line key={city} type="monotone" dataKey={city} stroke={YIELD_CITY_COLORS[i % YIELD_CITY_COLORS.length]} strokeWidth={1.5} dot={false} />
@@ -211,8 +210,8 @@ export function FipeZapChart() {
               <XAxis dataKey="date" tickFormatter={formatMonth} interval={5} tick={{ fontSize: 11 }} />
               <YAxis domain={['auto', 'auto']} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [v.toFixed(1), name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [v.toFixed(1), name]) as any}
               />
               <Legend />
               <Line type="monotone" dataKey="vendaIdx" stroke={tc.cyan} strokeWidth={2} dot={false} name="Venda (base 100)" />

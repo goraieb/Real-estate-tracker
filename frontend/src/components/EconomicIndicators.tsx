@@ -85,8 +85,8 @@ export function EconomicIndicators() {
               <XAxis dataKey="date" tickFormatter={formatMonth} interval={5} tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => `${v}%`} domain={['auto', 'auto']} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name === 'selic' ? 'Selic (meta)' : name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [`${v.toFixed(2)}%`, name === 'selic' ? 'Selic (meta)' : name]) as any}
               />
               <Area type="stepAfter" dataKey="selic" fill={tc.purple} fillOpacity={0.15} stroke={tc.purple} strokeWidth={2} name="Selic (meta)" />
             </ComposedChart>
@@ -102,8 +102,8 @@ export function EconomicIndicators() {
               <YAxis yAxisId="left" tickFormatter={v => `${v}%`} />
               <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [`${v.toFixed(2)}%`, name]) as any}
               />
               <Legend />
               <Bar yAxisId="left" dataKey="ipca" fill={tc.cyan} fillOpacity={0.7} name="IPCA mensal" />
@@ -121,8 +121,8 @@ export function EconomicIndicators() {
               <YAxis yAxisId="left" tickFormatter={v => `${v}%`} />
               <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [`${v.toFixed(2)}%`, name]) as any}
               />
               <Legend />
               <Bar yAxisId="left" dataKey="igpm" fill={tc.pink} fillOpacity={0.7} name="IGP-M mensal" />
@@ -139,8 +139,8 @@ export function EconomicIndicators() {
               <XAxis dataKey="date" tickFormatter={formatMonth} interval={5} tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => `${v}%`} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [`${v.toFixed(2)}%`, name]) as any}
               />
               <Legend />
               <Line type="monotone" dataKey="ipcaAcum12" stroke={tc.cyan} strokeWidth={2} dot={false} name="IPCA 12m" />
@@ -158,8 +158,8 @@ export function EconomicIndicators() {
               <XAxis dataKey="date" tickFormatter={formatMonth} interval={5} tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => `${v}%`} />
               <Tooltip
-                labelFormatter={formatMonth}
-                formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]}
+                labelFormatter={formatMonth as any}
+                formatter={((v: number, name: string) => [`${v.toFixed(2)}%`, name]) as any}
               />
               <Legend />
               <Line type="stepAfter" dataKey="selic" stroke={tc.purple} strokeWidth={2} dot={false} name="Selic" />
