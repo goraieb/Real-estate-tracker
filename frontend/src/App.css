@@ -2147,3 +2147,299 @@
     height: 600px;
   }
 }
+
+/* ===== Neighborhood Scorecard ===== */
+
+.scorecard-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.scorecard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.scorecard-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.scorecard-meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.meta-pill {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+}
+
+.meta-arbitrage {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.scorecard-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.btn-filter.active {
+  background: var(--color-success);
+  color: white;
+  border-color: var(--color-success);
+}
+
+.scorecard-legend {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.scorecard-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scorecard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.scorecard-table th,
+.scorecard-table td {
+  padding: 0.5rem 0.6rem;
+  text-align: right;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.scorecard-table th:first-child,
+.scorecard-table td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--bg-card);
+  z-index: 1;
+}
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-th:hover {
+  color: var(--color-primary);
+}
+
+.sort-asc { transform: rotate(180deg); }
+
+.row-arbitrage {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.star-arbitrage {
+  color: var(--color-success);
+  margin-right: 4px;
+  vertical-align: text-bottom;
+}
+
+.td-bairro {
+  font-weight: 500;
+}
+
+.td-below-median { color: var(--color-success); }
+.td-above-median { color: var(--text-primary); }
+
+.td-best-yield {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  justify-content: flex-end;
+}
+
+.positive { color: var(--color-success); }
+.negative { color: var(--color-danger); }
+
+.trend-positive { color: var(--color-success); vertical-align: text-bottom; }
+.trend-negative { color: var(--color-danger); vertical-align: text-bottom; }
+.trend-neutral { color: var(--text-muted); vertical-align: text-bottom; }
+
+.signal-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.signal-green { background: var(--color-success); }
+.signal-yellow { background: #eab308; }
+.signal-red { background: var(--color-danger); }
+.signal-gray { background: var(--text-muted); }
+
+/* ===== Market Timing Dashboard ===== */
+
+.timing-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.timing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.timing-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.timing-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.signal-favorable {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.signal-unfavorable {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+
+.signal-neutral {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.timing-badge-score {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.signal-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.signal-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  background: var(--bg-subtle);
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.signal-detail-name {
+  font-weight: 500;
+}
+
+.timing-chart-section {
+  margin-bottom: 1.25rem;
+}
+
+.timing-chart-section h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* ===== City Yields in FipeZAP chart ===== */
+
+.yield-ranking {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.yield-ranking .meta-pill {
+  border-left-width: 3px;
+}
+
+/* ===== Data source note (shared) ===== */
+
+.data-source-note {
+  margin-top: 0.75rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* ===== Mobile responsiveness for new components ===== */
+
+@media (max-width: 768px) {
+  .scorecard-header {
+    flex-direction: column;
+  }
+
+  .timing-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .signal-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scorecard-table {
+    font-size: 0.72rem;
+  }
+
+  .scorecard-table th,
+  .scorecard-table td {
+    padding: 0.35rem 0.4rem;
+  }
+}

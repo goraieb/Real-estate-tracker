@@ -307,3 +307,103 @@ export async function createAlert(alert: {
 export async function deleteAlert(id: number): Promise<void> {
   await fetch(`${BASE_URL}/api/v1/market/alerts/${id}`, { method: 'DELETE' });
 }
+
+// --- Cross-Dataset Analytics ---
+
+export interface ScorecardEntry {
+  bairro: string;
+  precoM2: number;
+  momentum6mPct: number | null;
+  yieldAirbnbPct: number | null;
+  yieldLongtermPct: number | null;
+  bestYieldPct: number;
+  spreadVsSelicPp: number | null;
+  totalReturnVsCdiPp: number | null;
+  liquidityScore: number;
+  airbnbDensity: number;
+  isArbitrage: boolean;
+  centroLat: number | null;
+  centroLng: number | null;
+}
+
+export interface ScorecardResponse {
+  scorecard: ScorecardEntry[];
+  medians: { precoM2: number; yieldPct: number };
+  benchmarks: { selicAnual: number; cdi12m: number | null };
+  totalBairros: number;
+  arbitrageCount: number;
+}
+
+export async function fetchNeighborhoodScorecard(): Promise<ScorecardResponse> {
+  try {
+    return await fetchJson('/api/v1/market/neighborhood-scorecard');
+  } catch {
+    return { scorecard: [], medians: { precoM2: 0, yieldPct: 0 }, benchmarks: { selicAnual: 0, cdi12m: null }, totalBairros: 0, arbitrageCount: 0 };
+  }
+}
+
+export interface TimingSignal {
+  composite: 'favorable' | 'neutral' | 'unfavorable';
+  score: number;
+  maxScore: number;
+  details: Record<string, string>;
+}
+
+export interface TimingResponse {
+  timeSeries: Array<Record<string, unknown>>;
+  signal: TimingSignal;
+  months: number;
+}
+
+export async function fetchTimingSignals(): Promise<TimingResponse> {
+  try {
+    return await fetchJson('/api/v1/market/timing-signals');
+  } catch {
+    return { timeSeries: [], signal: { composite: 'neutral', score: 0, maxScore: 5, details: {} }, months: 0 };
+  }
+}
+
+export interface CityYieldEntry {
+  data: string;
+  precoM2Venda: number;
+  precoM2Locacao: number;
+  yieldBrutoPct: number | null;
+}
+
+export interface CityYieldsResponse {
+  cities: Record<string, CityYieldEntry[]>;
+  ranking: Array<{ cidade: string; yieldBrutoPct: number | null; precoM2Venda: number; precoM2Locacao: number }>;
+  totalCities: number;
+}
+
+export async function fetchCityYields(): Promise<CityYieldsResponse> {
+  try {
+    return await fetchJson('/api/v1/market/city-yields');
+  } catch {
+    return { cities: {}, ranking: [], totalCities: 0 };
+  }
+}
+
+export interface AppreciationEntry {
+  bairro: string;
+  periodoInicio: string;
+  periodoFim: string;
+  precoM2Inicio: number;
+  precoM2Fim: number;
+  nominalChangePct: number;
+  realChangePct: number;
+  inflationPct: number | null;
+  mesesAnalisados: number;
+  centroLat: number | null;
+  centroLng: number | null;
+}
+
+export async function fetchRealAppreciation(bairro?: string, months = 24): Promise<{ appreciation: AppreciationEntry[]; totalBairros: number }> {
+  try {
+    const qs = new URLSearchParams({ months: String(months) });
+    if (bairro) qs.set('bairro', bairro);
+    return await fetchJson(`/api/v1/market/real-appreciation?${qs}`);
+  } catch {
+    return { appreciation: [], totalBairros: 0 };
+  }
+}

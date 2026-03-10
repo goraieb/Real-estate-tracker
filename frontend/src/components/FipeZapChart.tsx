@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -15,7 +15,9 @@ import {
 import { useThemeColors } from '../hooks/useThemeColors';
 import { FIPEZAP_VENDA_MENSAL, FIPEZAP_LOCACAO_MENSAL } from '../services/mockMarketData';
 
-type View = 'index' | 'venda' | 'locacao' | 'venda_vs_locacao';
+import { fetchCityYields, type CityYieldsResponse } from '../services/marketApi';
+
+type View = 'index' | 'venda' | 'locacao' | 'venda_vs_locacao' | 'city_yields';
 
 function formatMonth(dateStr: string): string {
   const [y, m] = dateStr.split('-');
@@ -45,9 +47,22 @@ function buildIndexSeries(data: { date: string; varMensal: number }[]): { date: 
   return result;
 }
 
+const YIELD_CITY_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#84cc16'];
+
 export function FipeZapChart() {
   const [view, setView] = useState<View>('index');
+  const [cityYields, setCityYields] = useState<CityYieldsResponse | null>(null);
+  const [yieldLoading, setYieldLoading] = useState(false);
   const tc = useThemeColors();
+
+  useEffect(() => {
+    if (view === 'city_yields' && !cityYields) {
+      setYieldLoading(true);
+      fetchCityYields()
+        .then(setCityYields)
+        .finally(() => setYieldLoading(false));
+    }
+  }, [view, cityYields]);
 
   const vendaSeries = useMemo(() => buildIndexSeries(FIPEZAP_VENDA_MENSAL), []);
   const locacaoSeries = useMemo(() => buildIndexSeries(FIPEZAP_LOCACAO_MENSAL), []);
@@ -141,6 +156,53 @@ export function FipeZapChart() {
           </ResponsiveContainer>
         );
 
+      case 'city_yields': {
+        if (yieldLoading) return <div className="loading-state">Carregando yields...</div>;
+        if (!cityYields || cityYields.ranking.length === 0) return <div className="empty-state">Sem dados de yield por cidade.</div>;
+
+        // Build time series with all cities
+        const allDates = new Set<string>();
+        for (const series of Object.values(cityYields.cities)) {
+          for (const pt of series) allDates.add(pt.data);
+        }
+        const sortedDates = [...allDates].sort();
+        const yieldChartData = sortedDates.map(d => {
+          const row: Record<string, unknown> = { date: d };
+          for (const [city, series] of Object.entries(cityYields.cities)) {
+            const pt = series.find(s => s.data === d);
+            row[city] = pt?.yieldBrutoPct ?? null;
+          }
+          return row;
+        });
+
+        const cityNames = Object.keys(cityYields.cities);
+
+        return (
+          <>
+            {/* Ranking badges */}
+            <div className="yield-ranking">
+              {cityYields.ranking.map((r, i) => (
+                <span key={r.cidade} className="meta-pill" style={{ borderColor: YIELD_CITY_COLORS[i % YIELD_CITY_COLORS.length] }}>
+                  {r.cidade}: {r.yieldBrutoPct?.toFixed(1)}%
+                </span>
+              ))}
+            </div>
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart data={yieldChartData} margin={{ left: 10, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="date" tickFormatter={formatMonth} interval={5} tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={v => `${v}%`} domain={['auto', 'auto']} />
+                <Tooltip labelFormatter={formatMonth} formatter={(v: number) => [`${v?.toFixed(2) ?? '—'}%`]} />
+                <Legend />
+                {cityNames.map((city, i) => (
+                  <Line key={city} type="monotone" dataKey={city} stroke={YIELD_CITY_COLORS[i % YIELD_CITY_COLORS.length]} strokeWidth={1.5} dot={false} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </>
+        );
+      }
+
       default: // 'index'
         return (
           <ResponsiveContainer width="100%" height={320}>
@@ -192,6 +254,9 @@ export function FipeZapChart() {
         </button>
         <button className={view === 'venda_vs_locacao' ? 'active' : ''} onClick={() => setView('venda_vs_locacao')}>
           Venda vs Locação
+        </button>
+        <button className={view === 'city_yields' ? 'active' : ''} onClick={() => setView('city_yields')}>
+          Yield por Cidade
         </button>
       </div>
 
