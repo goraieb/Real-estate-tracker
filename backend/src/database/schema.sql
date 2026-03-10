@@ -113,3 +113,76 @@ CREATE TABLE IF NOT EXISTS market_alerts (
     ultimo_disparo TEXT,
     criado_em TEXT DEFAULT (datetime('now'))
 );
+
+-- ============================================
+-- ECONOMIC INDICATORS CACHE
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS indicadores_economicos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fonte TEXT NOT NULL,          -- 'bcb', 'ipeadata', 'b3', 'abecip'
+    serie TEXT NOT NULL,          -- 'selic', 'ipca', 'igpm', 'ifix', etc.
+    data TEXT NOT NULL,
+    valor REAL NOT NULL,
+    criado_em TEXT DEFAULT (datetime('now')),
+    UNIQUE(fonte, serie, data)
+);
+
+CREATE INDEX IF NOT EXISTS idx_indicadores_fonte_serie ON indicadores_economicos(fonte, serie);
+CREATE INDEX IF NOT EXISTS idx_indicadores_data ON indicadores_economicos(data);
+
+-- ============================================
+-- FIPEZAP PRICE INDEX CACHE
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS fipezap_precos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT NOT NULL,           -- 'venda' or 'locacao'
+    cidade TEXT NOT NULL,
+    data TEXT NOT NULL,
+    preco_m2 REAL NOT NULL,
+    variacao_mensal REAL,
+    criado_em TEXT DEFAULT (datetime('now')),
+    UNIQUE(tipo, cidade, data)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fipezap_cidade ON fipezap_precos(cidade);
+CREATE INDEX IF NOT EXISTS idx_fipezap_tipo ON fipezap_precos(tipo);
+CREATE INDEX IF NOT EXISTS idx_fipezap_data ON fipezap_precos(data);
+
+-- ============================================
+-- AIRBNB LISTINGS CACHE
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS airbnb_listings (
+    id INTEGER PRIMARY KEY,
+    cidade TEXT NOT NULL,
+    bairro TEXT,
+    latitude REAL,
+    longitude REAL,
+    tipo_quarto TEXT,
+    preco_noite REAL,
+    minimo_noites INTEGER,
+    qtd_reviews INTEGER,
+    reviews_por_mes REAL,
+    disponibilidade_365 INTEGER,
+    snapshot_data TEXT,
+    criado_em TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_airbnb_cidade ON airbnb_listings(cidade);
+CREATE INDEX IF NOT EXISTS idx_airbnb_bairro ON airbnb_listings(bairro);
+
+-- ============================================
+-- DATA LOAD STATUS TRACKING
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS data_load_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,         -- 'itbi', 'bcb', 'fipezap', 'airbnb', 'ibge', etc.
+    status TEXT NOT NULL,         -- 'running', 'completed', 'failed'
+    records_loaded INTEGER DEFAULT 0,
+    error_message TEXT,
+    started_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT
+);

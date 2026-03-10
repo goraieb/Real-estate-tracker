@@ -1,9 +1,12 @@
 /**
  * API client for market explorer endpoints.
- * Falls back to mock data when the backend is unavailable.
  *
- * Tracks data source ("database" for real data, "mock" for demo data)
- * so the UI can indicate whether the user is viewing real ITBI transactions.
+ * Real-data-first: connects directly to the backend for ITBI transactions,
+ * neighborhood stats, yield maps, and market alerts.
+ *
+ * Mock data is ONLY used when VITE_DEMO=true (explicit demo mode).
+ * When the backend is unreachable, returns empty results instead of mock data
+ * so the UI can prompt the user to load data via the admin panel.
  */
 
 import type {
@@ -14,14 +17,16 @@ import type {
   MarketStats,
   MarketAlert,
 } from '../types';
-import {
-  MOCK_TRANSACTIONS,
-  MOCK_NEIGHBORHOOD_STATS,
-  MOCK_YIELD_DATA,
-  getMockPriceEvolution,
-} from './mockTransactions';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
+
+// Lazy-load mock data only in demo mode to avoid bundling it in production
+async function getMocks() {
+  const { MOCK_TRANSACTIONS, MOCK_NEIGHBORHOOD_STATS, MOCK_YIELD_DATA, getMockPriceEvolution } =
+    await import('./mockTransactions');
+  return { MOCK_TRANSACTIONS, MOCK_NEIGHBORHOOD_STATS, MOCK_YIELD_DATA, getMockPriceEvolution };
+}
 
 async function fetchJson<T>(url: string): Promise<T> {
   const resp = await fetch(`${BASE_URL}${url}`);
@@ -31,18 +36,14 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 /** Metadata about the data source for the last fetch. */
 export interface DataSourceInfo {
-  source: 'database' | 'mock';
+  source: 'database' | 'mock' | 'empty';
   total: number;
   filtered?: number;
   minDate?: string | null;
   maxDate?: string | null;
 }
 
-/** Tracks the latest data source info (updated by fetchTransactions). */
-let _lastDataSource: DataSourceInfo = {
-  source: 'mock',
-  total: MOCK_TRANSACTIONS.length,
-};
+let _lastDataSource: DataSourceInfo = { source: 'empty', total: 0 };
 
 export function getDataSourceInfo(): DataSourceInfo {
   return _lastDataSource;
@@ -87,11 +88,17 @@ export async function fetchTransactionCount(params: {
     _lastDataSource = info;
     return info;
   } catch {
-    const info: DataSourceInfo = {
-      source: 'mock',
-      total: MOCK_TRANSACTIONS.length,
-      filtered: MOCK_TRANSACTIONS.length,
-    };
+    if (DEMO_MODE) {
+      const { MOCK_TRANSACTIONS } = await getMocks();
+      const info: DataSourceInfo = {
+        source: 'mock',
+        total: MOCK_TRANSACTIONS.length,
+        filtered: MOCK_TRANSACTIONS.length,
+      };
+      _lastDataSource = info;
+      return info;
+    }
+    const info: DataSourceInfo = { source: 'empty', total: 0, filtered: 0 };
     _lastDataSource = info;
     return info;
   }
@@ -102,7 +109,7 @@ export async function fetchTransactionCount(params: {
 export interface TransactionResult {
   transactions: TransacaoITBI[];
   total: number;
-  source: 'database' | 'mock';
+  source: 'database' | 'mock' | 'empty';
 }
 
 export async function fetchTransactions(params: {
@@ -145,19 +152,21 @@ export async function fetchTransactions(params: {
       longitude: f.geometry.coordinates[0],
     }));
   } catch {
-    // Fallback to mock data
-    let data = [...MOCK_TRANSACTIONS];
-    if (params.dataInicio) data = data.filter(t => t.dataTransacao >= params.dataInicio!);
-    if (params.dataFim) data = data.filter(t => t.dataTransacao <= params.dataFim!);
-    if (params.precoM2Min) data = data.filter(t => t.precoM2 !== null && t.precoM2 >= params.precoM2Min!);
-    if (params.precoM2Max) data = data.filter(t => t.precoM2 !== null && t.precoM2 <= params.precoM2Max!);
-    if (params.bairro) data = data.filter(t => t.bairro?.toLowerCase().includes(params.bairro!.toLowerCase()));
-
-    _lastDataSource = { source: 'mock', total: data.length };
-
-    const start = params.offset || 0;
-    const limit = params.limit || 100_000;
-    return data.slice(start, start + limit);
+    if (DEMO_MODE) {
+      const { MOCK_TRANSACTIONS } = await getMocks();
+      let data = [...MOCK_TRANSACTIONS];
+      if (params.dataInicio) data = data.filter(t => t.dataTransacao >= params.dataInicio!);
+      if (params.dataFim) data = data.filter(t => t.dataTransacao <= params.dataFim!);
+      if (params.precoM2Min) data = data.filter(t => t.precoM2 !== null && t.precoM2 >= params.precoM2Min!);
+      if (params.precoM2Max) data = data.filter(t => t.precoM2 !== null && t.precoM2 <= params.precoM2Max!);
+      if (params.bairro) data = data.filter(t => t.bairro?.toLowerCase().includes(params.bairro!.toLowerCase()));
+      _lastDataSource = { source: 'mock', total: data.length };
+      const start = params.offset || 0;
+      const limit = params.limit || 100_000;
+      return data.slice(start, start + limit);
+    }
+    _lastDataSource = { source: 'empty', total: 0 };
+    return [];
   }
 }
 
@@ -167,7 +176,11 @@ export async function fetchNeighborhoods(): Promise<{ neighborhoods: Neighborhoo
   try {
     return await fetchJson('/api/v1/market/neighborhoods');
   } catch {
-    return { neighborhoods: MOCK_NEIGHBORHOOD_STATS, boundaries: null };
+    if (DEMO_MODE) {
+      const { MOCK_NEIGHBORHOOD_STATS } = await getMocks();
+      return { neighborhoods: MOCK_NEIGHBORHOOD_STATS, boundaries: null };
+    }
+    return { neighborhoods: [], boundaries: null };
   }
 }
 
@@ -180,7 +193,11 @@ export async function fetchPriceEvolution(bairro: string, freq = 'monthly'): Pro
     );
     return data.data;
   } catch {
-    return getMockPriceEvolution(bairro);
+    if (DEMO_MODE) {
+      const { getMockPriceEvolution } = await getMocks();
+      return getMockPriceEvolution(bairro);
+    }
+    return [];
   }
 }
 
@@ -191,24 +208,34 @@ export async function fetchMarketStats(bbox?: string): Promise<MarketStats> {
     const qs = bbox ? `?bbox=${bbox}` : '';
     return await fetchJson(`/api/v1/market/stats${qs}`);
   } catch {
-    // Generate from mock data
-    const prices = MOCK_TRANSACTIONS.filter(t => t.precoM2).map(t => t.precoM2!);
-    prices.sort((a, b) => a - b);
+    if (DEMO_MODE) {
+      const { MOCK_TRANSACTIONS, MOCK_NEIGHBORHOOD_STATS } = await getMocks();
+      const prices = MOCK_TRANSACTIONS.filter(t => t.precoM2).map(t => t.precoM2!);
+      prices.sort((a, b) => a - b);
+      return {
+        totalTransacoes: MOCK_TRANSACTIONS.length,
+        precoM2Medio: Math.round(prices.reduce((s, p) => s + p, 0) / prices.length),
+        precoM2Min: prices[0],
+        precoM2Max: prices[prices.length - 1],
+        topBairros: MOCK_NEIGHBORHOOD_STATS.slice(0, 5).map(n => ({
+          bairro: n.bairro,
+          precoM2: n.precoM2Medio || 0,
+          qtd: n.qtdTransacoes,
+        })),
+        bottomBairros: [...MOCK_NEIGHBORHOOD_STATS].reverse().slice(0, 5).map(n => ({
+          bairro: n.bairro,
+          precoM2: n.precoM2Medio || 0,
+          qtd: n.qtdTransacoes,
+        })),
+      };
+    }
     return {
-      totalTransacoes: MOCK_TRANSACTIONS.length,
-      precoM2Medio: Math.round(prices.reduce((s, p) => s + p, 0) / prices.length),
-      precoM2Min: prices[0],
-      precoM2Max: prices[prices.length - 1],
-      topBairros: MOCK_NEIGHBORHOOD_STATS.slice(0, 5).map(n => ({
-        bairro: n.bairro,
-        precoM2: n.precoM2Medio || 0,
-        qtd: n.qtdTransacoes,
-      })),
-      bottomBairros: [...MOCK_NEIGHBORHOOD_STATS].reverse().slice(0, 5).map(n => ({
-        bairro: n.bairro,
-        precoM2: n.precoM2Medio || 0,
-        qtd: n.qtdTransacoes,
-      })),
+      totalTransacoes: 0,
+      precoM2Medio: null,
+      precoM2Min: null,
+      precoM2Max: null,
+      topBairros: [],
+      bottomBairros: [],
     };
   }
 }
@@ -220,7 +247,11 @@ export async function fetchYieldMap(): Promise<YieldBairro[]> {
     const data = await fetchJson<{ yieldData: YieldBairro[] }>('/api/v1/market/yield-map');
     return data.yieldData;
   } catch {
-    return MOCK_YIELD_DATA;
+    if (DEMO_MODE) {
+      const { MOCK_YIELD_DATA } = await getMocks();
+      return MOCK_YIELD_DATA;
+    }
+    return [];
   }
 }
 
@@ -239,8 +270,11 @@ export async function fetchTimeSeries(periodo: string, tipo?: string): Promise<T
       longitude: f.geometry.coordinates[0],
     }));
   } catch {
-    // Filter mock data by month
-    return MOCK_TRANSACTIONS.filter(t => t.dataTransacao.startsWith(periodo));
+    if (DEMO_MODE) {
+      const { MOCK_TRANSACTIONS } = await getMocks();
+      return MOCK_TRANSACTIONS.filter(t => t.dataTransacao.startsWith(periodo));
+    }
+    return [];
   }
 }
 
@@ -261,33 +295,15 @@ export async function createAlert(alert: {
   preco_m2_limite?: number;
   yield_limite?: number;
 }): Promise<MarketAlert> {
-  try {
-    const resp = await fetch(`${BASE_URL}/api/v1/market/alerts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(alert),
-    });
-    if (!resp.ok) throw new Error(`API error: ${resp.status}`);
-    return resp.json();
-  } catch {
-    // Mock: return a fake alert
-    return {
-      id: Date.now(),
-      tipo: alert.tipo as MarketAlert['tipo'],
-      bairro: alert.bairro,
-      logradouro: alert.logradouro,
-      preco_m2_limite: alert.preco_m2_limite,
-      yield_limite: alert.yield_limite,
-      ativo: true,
-      criado_em: new Date().toISOString(),
-    };
-  }
+  const resp = await fetch(`${BASE_URL}/api/v1/market/alerts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(alert),
+  });
+  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+  return resp.json();
 }
 
 export async function deleteAlert(id: number): Promise<void> {
-  try {
-    await fetch(`${BASE_URL}/api/v1/market/alerts/${id}`, { method: 'DELETE' });
-  } catch {
-    // Silently fail in demo mode
-  }
+  await fetch(`${BASE_URL}/api/v1/market/alerts/${id}`, { method: 'DELETE' });
 }

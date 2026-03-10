@@ -377,12 +377,14 @@ async def get_market_stats(
 async def get_yield_map():
     """Get neighborhood-level yield estimates.
 
-    Cross-references ITBI purchase prices with estimated rental values
-    to calculate yield per bairro.
+    Cross-references ITBI purchase prices with real rental data from:
+    1. Airbnb listings (short-term yield)
+    2. SECOVI rental index (long-term yield)
+    3. Statistical model fallback
     """
     db = await get_db()
     try:
-        # Get average purchase price per bairro
+        # Get average purchase price per bairro from ITBI
         cursor = await db.execute(
             """SELECT bairro,
                       AVG(preco_m2) as preco_m2_compra,
@@ -391,33 +393,88 @@ async def get_yield_map():
             WHERE preco_m2 BETWEEN 500 AND 150000 AND bairro IS NOT NULL
             GROUP BY bairro"""
         )
-        rows = await cursor.fetchall()
+        itbi_rows = await cursor.fetchall()
 
-        # Estimate rental yield using typical SP rental-to-price ratios
-        # Average SP rental yield is ~0.4-0.6% monthly (4.8-7.2% annual)
-        # Higher yield in cheaper areas, lower in premium areas
+        # Pre-load Airbnb rental data per bairro (real short-term rental prices)
+        airbnb_data = {}
+        try:
+            cursor = await db.execute(
+                """SELECT bairro,
+                          AVG(preco_noite) as preco_medio_noite,
+                          AVG(CAST(365 - disponibilidade_365 AS REAL) / 365) as ocupacao_media
+                FROM airbnb_listings
+                WHERE preco_noite > 0 AND preco_noite < 10000 AND bairro IS NOT NULL
+                GROUP BY bairro"""
+            )
+            for r in await cursor.fetchall():
+                airbnb_data[r["bairro"].lower()] = {
+                    "preco_noite": r["preco_medio_noite"],
+                    "ocupacao": r["ocupacao_media"] or 0.5,
+                }
+        except Exception:
+            pass
+
+        # Pre-load SECOVI rental price base
+        secovi_rental_m2 = None
+        try:
+            cursor = await db.execute(
+                """SELECT valor FROM indicadores_economicos
+                WHERE fonte = 'secovi' AND serie = 'locacao_m2_sp'
+                ORDER BY data DESC LIMIT 1"""
+            )
+            sr = await cursor.fetchone()
+            if sr:
+                secovi_rental_m2 = sr["valor"]
+        except Exception:
+            pass
+
+        # Neighborhood rental multipliers (SECOVI regional factors)
+        from ..data_sources.secovi import SecoviClient
+        secovi = SecoviClient()
+
         result = []
-        for row in rows:
+        for row in itbi_rows:
             preco_m2 = row["preco_m2_compra"]
-            # Simple yield model: inversely correlated with price
-            # Premium areas (~R$15K+/m²): ~0.35% monthly = 4.2% annual
-            # Mid areas (~R$8-15K/m²): ~0.45% monthly = 5.4% annual
-            # Affordable areas (<R$8K/m²): ~0.55% monthly = 6.6% annual
-            if preco_m2 >= 15000:
-                yield_mensal = 0.35
-            elif preco_m2 >= 8000:
-                yield_mensal = 0.35 + (15000 - preco_m2) / 70000 * 0.10
-            else:
-                yield_mensal = 0.45 + (8000 - preco_m2) / 75000 * 0.10
+            bairro = row["bairro"]
+            bairro_lower = bairro.lower() if bairro else ""
+            data_source = "model"
+            aluguel_m2_estimado = None
+            yield_mensal = None
+
+            # Strategy 1: Real Airbnb data for short-term yield
+            airbnb_info = airbnb_data.get(bairro_lower)
+            if airbnb_info:
+                preco_noite = airbnb_info["preco_noite"]
+                ocupacao = airbnb_info["ocupacao"]
+                receita_mensal = preco_noite * 30 * ocupacao
+                aluguel_m2_estimado = receita_mensal / 50
+                yield_mensal = (aluguel_m2_estimado / preco_m2) * 100
+                data_source = "airbnb"
+
+            # Strategy 2: SECOVI rental data with neighborhood multiplier
+            if yield_mensal is None and secovi_rental_m2:
+                bairro_rental = secovi.get_aluguel_m2_bairro(bairro)
+                if bairro_rental:
+                    aluguel_m2_estimado = bairro_rental
+                    yield_mensal = (aluguel_m2_estimado / preco_m2) * 100
+                    data_source = "secovi"
+
+            # Strategy 3: Statistical model fallback
+            if yield_mensal is None:
+                if preco_m2 >= 15000:
+                    yield_mensal = 0.35
+                elif preco_m2 >= 8000:
+                    yield_mensal = 0.35 + (15000 - preco_m2) / 70000 * 0.10
+                else:
+                    yield_mensal = 0.45 + (8000 - preco_m2) / 75000 * 0.10
+                aluguel_m2_estimado = preco_m2 * yield_mensal / 100
 
             yield_anual = yield_mensal * 12
-            aluguel_m2_estimado = preco_m2 * yield_mensal / 100
-
-            center = get_bairro_center(row["bairro"]) if row["bairro"] else None
+            center = get_bairro_center(bairro) if bairro else None
 
             result.append(
                 {
-                    "bairro": row["bairro"],
+                    "bairro": bairro,
                     "precoM2Compra": round(preco_m2, 2),
                     "aluguelM2Estimado": round(aluguel_m2_estimado, 2),
                     "yieldAnualPct": round(yield_anual, 2),
@@ -425,6 +482,7 @@ async def get_yield_map():
                     "qtdTransacoes": row["qtd"],
                     "centroLat": center[0] if center else None,
                     "centroLng": center[1] if center else None,
+                    "dataSource": data_source,
                 }
             )
 

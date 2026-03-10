@@ -6,6 +6,11 @@ from .ipeadata import IpeadataClient
 from .fipezap import FipeZAPParser
 from .insideairbnb import InsideAirbnbClient
 from .itbi import ITBIParser
+from .b3 import B3Client
+from .secovi import SecoviClient
+from .geosampa import GeoSampaClient
+from .abecip import ABECIPClient
+from .cub import CUBClient
 
 __all__ = [
     "BCBClient",
@@ -14,4 +19,9 @@ __all__ = [
     "FipeZAPParser",
     "InsideAirbnbClient",
     "ITBIParser",
+    "B3Client",
+    "SecoviClient",
+    "GeoSampaClient",
+    "ABECIPClient",
+    "CUBClient",
 ]
