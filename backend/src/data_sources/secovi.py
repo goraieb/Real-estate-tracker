@@ -14,7 +14,11 @@ from typing import Optional
 
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
