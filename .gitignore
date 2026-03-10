@@ -24,6 +24,7 @@ env/
 
 # Data files (downloaded datasets - too large for git)
 data/
+!frontend/public/data/
 *.csv.gz
 *.xlsx
 !docs/**

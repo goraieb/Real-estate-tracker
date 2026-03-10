@@ -1,0 +1,232 @@
+[
+  {
+    "id": "1",
+    "nome": "Apto Pinheiros",
+    "tipo": "apartamento",
+    "endereco": {
+      "logradouro": "Rua dos Pinheiros",
+      "numero": "450",
+      "bairro": "Pinheiros",
+      "cidade": "São Paulo",
+      "uf": "SP",
+      "latitude": -23.5613,
+      "longitude": -46.6920
+    },
+    "areaUtil": 70,
+    "quartos": 2,
+    "vagas": 1,
+    "compra": {
+      "valorCompra": 750000,
+      "dataCompra": "2022-06-01",
+      "itbiPago": 22500,
+      "custosCartorio": 5200
+    },
+    "custos": {
+      "iptuAnual": 3600,
+      "condominioMensal": 900,
+      "seguroAnual": 600,
+      "manutencaoMensal": 200
+    },
+    "renda": {
+      "tipo": "aluguel_longterm",
+      "aluguelMensal": 4200,
+      "taxaVacanciaPct": 5
+    },
+    "valorAtualEstimado": 830000,
+    "fonteAvaliacao": "FipeZAP",
+    "financiamento": {
+      "valorFinanciado": 500000,
+      "taxaJurosAnual": 9.5,
+      "prazoMeses": 360,
+      "sistema": "SAC",
+      "saldoDevedor": 465000,
+      "banco": "Caixa"
+    }
+  },
+  {
+    "id": "2",
+    "nome": "Studio Vila Madalena",
+    "tipo": "apartamento",
+    "endereco": {
+      "logradouro": "Rua Harmonia",
+      "numero": "120",
+      "bairro": "Vila Madalena",
+      "cidade": "São Paulo",
+      "uf": "SP",
+      "latitude": -23.5535,
+      "longitude": -46.6910
+    },
+    "areaUtil": 35,
+    "quartos": 1,
+    "vagas": 0,
+    "compra": {
+      "valorCompra": 420000,
+      "dataCompra": "2023-03-15"
+    },
+    "custos": {
+      "iptuAnual": 1800,
+      "condominioMensal": 650,
+      "seguroAnual": 350,
+      "manutencaoMensal": 100
+    },
+    "renda": {
+      "tipo": "airbnb",
+      "diariaMedia": 320,
+      "taxaOcupacaoPct": 62,
+      "custosPlataformaPct": 3,
+      "taxaVacanciaPct": 0
+    },
+    "valorAtualEstimado": 445000,
+    "fonteAvaliacao": "FipeZAP"
+  },
+  {
+    "id": "3",
+    "nome": "Apto Copacabana",
+    "tipo": "apartamento",
+    "endereco": {
+      "logradouro": "Av. Nossa Senhora de Copacabana",
+      "numero": "680",
+      "bairro": "Copacabana",
+      "cidade": "Rio de Janeiro",
+      "uf": "RJ",
+      "latitude": -22.9711,
+      "longitude": -43.1863
+    },
+    "areaUtil": 85,
+    "quartos": 3,
+    "vagas": 1,
+    "compra": {
+      "valorCompra": 680000,
+      "dataCompra": "2021-09-10"
+    },
+    "custos": {
+      "iptuAnual": 2800,
+      "condominioMensal": 1100,
+      "seguroAnual": 500,
+      "manutencaoMensal": 300
+    },
+    "renda": {
+      "tipo": "aluguel_longterm",
+      "aluguelMensal": 3800,
+      "taxaVacanciaPct": 8
+    },
+    "valorAtualEstimado": 720000,
+    "fonteAvaliacao": "FipeZAP",
+    "financiamento": {
+      "valorFinanciado": 450000,
+      "taxaJurosAnual": 10.2,
+      "prazoMeses": 240,
+      "sistema": "PRICE",
+      "saldoDevedor": 395000,
+      "banco": "Itaú"
+    }
+  },
+  {
+    "id": "4",
+    "nome": "Sala Comercial Faria Lima",
+    "tipo": "sala",
+    "endereco": {
+      "logradouro": "Av. Brigadeiro Faria Lima",
+      "numero": "3477",
+      "bairro": "Itaim Bibi",
+      "cidade": "São Paulo",
+      "uf": "SP",
+      "latitude": -23.5868,
+      "longitude": -46.6803
+    },
+    "areaUtil": 45,
+    "quartos": 0,
+    "vagas": 1,
+    "compra": {
+      "valorCompra": 520000,
+      "dataCompra": "2020-11-20",
+      "itbiPago": 15600,
+      "custosCartorio": 4100
+    },
+    "custos": {
+      "iptuAnual": 4200,
+      "condominioMensal": 1400,
+      "seguroAnual": 420,
+      "manutencaoMensal": 150
+    },
+    "renda": {
+      "tipo": "aluguel_longterm",
+      "aluguelMensal": 3500,
+      "taxaVacanciaPct": 10
+    },
+    "valorAtualEstimado": 590000,
+    "fonteAvaliacao": "FipeZAP"
+  },
+  {
+    "id": "5",
+    "nome": "Casa Florianópolis",
+    "tipo": "casa",
+    "endereco": {
+      "logradouro": "Rua das Rendeiras",
+      "numero": "88",
+      "bairro": "Lagoa da Conceição",
+      "cidade": "Florianópolis",
+      "uf": "SC",
+      "latitude": -27.6046,
+      "longitude": -48.4760
+    },
+    "areaUtil": 120,
+    "quartos": 3,
+    "vagas": 2,
+    "compra": {
+      "valorCompra": 950000,
+      "dataCompra": "2023-01-10",
+      "itbiPago": 28500,
+      "custosCartorio": 7800
+    },
+    "custos": {
+      "iptuAnual": 3200,
+      "condominioMensal": 0,
+      "seguroAnual": 900,
+      "manutencaoMensal": 500
+    },
+    "renda": {
+      "tipo": "airbnb",
+      "diariaMedia": 550,
+      "taxaOcupacaoPct": 55,
+      "custosPlataformaPct": 3,
+      "taxaVacanciaPct": 0
+    },
+    "valorAtualEstimado": 1080000,
+    "fonteAvaliacao": "FipeZAP"
+  },
+  {
+    "id": "6",
+    "nome": "Kitnet Centro BH",
+    "tipo": "apartamento",
+    "endereco": {
+      "logradouro": "Rua da Bahia",
+      "numero": "1234",
+      "bairro": "Centro",
+      "cidade": "Belo Horizonte",
+      "uf": "MG",
+      "latitude": -19.9191,
+      "longitude": -43.9387
+    },
+    "areaUtil": 28,
+    "quartos": 1,
+    "vagas": 0,
+    "compra": {
+      "valorCompra": 185000,
+      "dataCompra": "2024-02-28"
+    },
+    "custos": {
+      "iptuAnual": 900,
+      "condominioMensal": 380,
+      "seguroAnual": 200,
+      "manutencaoMensal": 80
+    },
+    "renda": {
+      "tipo": "aluguel_longterm",
+      "aluguelMensal": 1200,
+      "taxaVacanciaPct": 6
+    },
+    "valorAtualEstimado": 195000,
+    "fonteAvaliacao": "FipeZAP"
+  }
+]

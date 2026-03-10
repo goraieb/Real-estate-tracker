@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Imovel, Benchmarks } from '../types';
 import { apiToImovel, benchmarkApiToLocal } from '../types';
 import { api } from '../services/api';
-import { MOCK_IMOVEIS, MOCK_BENCHMARKS } from '../services/mockData';
+import { loadPortfolio, loadBenchmarks } from '../services/staticData';
 
 const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
 
@@ -97,13 +97,17 @@ export const useStore = create<AppState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     if (DEMO_MODE) {
-      const imoveis = [...MOCK_IMOVEIS];
-      set({
-        imoveis,
-        isLoading: false,
-        isDemo: true,
-        selectedId: imoveis[0]?.id ?? null,
-      });
+      try {
+        const imoveis = await loadPortfolio();
+        set({
+          imoveis,
+          isLoading: false,
+          isDemo: true,
+          selectedId: imoveis[0]?.id ?? null,
+        });
+      } catch {
+        set({ imoveis: [], isLoading: false, isDemo: true, error: 'Failed to load portfolio data' });
+      }
       return;
     }
 
@@ -119,20 +123,25 @@ export const useStore = create<AppState>((set, get) => ({
           : imoveis[0]?.id ?? null,
       });
     } catch {
-      // API unreachable — fall back to demo mode
-      const imoveis = [...MOCK_IMOVEIS];
-      set({
-        imoveis,
-        isLoading: false,
-        isDemo: true,
-        selectedId: imoveis[0]?.id ?? null,
-      });
+      // API unreachable — fall back to static data
+      try {
+        const imoveis = await loadPortfolio();
+        set({
+          imoveis,
+          isLoading: false,
+          isDemo: true,
+          selectedId: imoveis[0]?.id ?? null,
+        });
+      } catch {
+        set({ imoveis: [], isLoading: false, isDemo: true, error: 'Failed to load data' });
+      }
     }
   },
 
   fetchBenchmarks: async () => {
     if (DEMO_MODE) {
-      set({ benchmarks: MOCK_BENCHMARKS });
+      const benchmarks = await loadBenchmarks();
+      set({ benchmarks });
       return;
     }
 
@@ -140,7 +149,8 @@ export const useStore = create<AppState>((set, get) => ({
       const raw = await api.benchmark.atual();
       set({ benchmarks: benchmarkApiToLocal(raw) });
     } catch {
-      set({ benchmarks: MOCK_BENCHMARKS });
+      const benchmarks = await loadBenchmarks();
+      set({ benchmarks });
     }
   },
 

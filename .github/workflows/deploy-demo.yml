@@ -1,4 +1,4 @@
-name: Deploy Demo to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -20,6 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Fetch latest BCB indicators
+        run: python scripts/fetch_bcb_indicators.py --output frontend/public/data/indicators.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -30,7 +37,7 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Build demo
+      - name: Build
         working-directory: frontend
         env:
           VITE_DEMO: 'true'

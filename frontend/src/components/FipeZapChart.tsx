@@ -12,7 +12,7 @@ import {
   Bar,
 } from 'recharts';
 import { useThemeColors } from '../hooks/useThemeColors';
-import { FIPEZAP_VENDA_MENSAL, FIPEZAP_LOCACAO_MENSAL } from '../services/mockMarketData';
+import { FIPEZAP_VENDA_MENSAL, FIPEZAP_LOCACAO_MENSAL } from '../services/fipezapData';
 
 import { fetchCityYields, type CityYieldsResponse } from '../services/marketApi';
 

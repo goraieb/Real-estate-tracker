@@ -21,11 +21,36 @@ import type {
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
 
-// Lazy-load mock data only in demo mode to avoid bundling it in production
-async function getMocks() {
-  const { MOCK_TRANSACTIONS, MOCK_NEIGHBORHOOD_STATS, MOCK_YIELD_DATA, getMockPriceEvolution } =
-    await import('./mockTransactions');
-  return { MOCK_TRANSACTIONS, MOCK_NEIGHBORHOOD_STATS, MOCK_YIELD_DATA, getMockPriceEvolution };
+// Lazy-load static data only in demo mode to avoid bundling it in production
+import { loadItbiStats, loadItbiSample } from './staticData';
+import type { ItbiAggregate } from './staticData';
+
+// Convert ITBI aggregates to neighborhood stats format
+function aggregatesToNeighborhoods(aggs: ItbiAggregate[]): NeighborhoodStats[] {
+  const byBairro = new Map<string, { count: number; totalPreco: number; precos: number[] }>();
+  for (const a of aggs) {
+    const existing = byBairro.get(a.bairro) ?? { count: 0, totalPreco: 0, precos: [] };
+    existing.count += a.count;
+    existing.totalPreco += a.precoM2Medio * a.count;
+    existing.precos.push(a.precoM2Mediano);
+    byBairro.set(a.bairro, existing);
+  }
+  return Array.from(byBairro.entries()).map(([bairro, d]) => ({
+    bairro,
+    qtdTransacoes: d.count,
+    precoM2Medio: Math.round(d.totalPreco / d.count),
+    precoM2Mediano: d.precos[Math.floor(d.precos.length / 2)] ?? null,
+    centroLat: null,
+    centroLng: null,
+  }));
+}
+
+// Convert ITBI aggregates to price evolution points
+function aggregatesToEvolution(aggs: ItbiAggregate[], bairro: string): PriceEvolutionPoint[] {
+  return aggs
+    .filter(a => a.bairro.toLowerCase().includes(bairro.toLowerCase()))
+    .sort((a, b) => a.periodo.localeCompare(b.periodo))
+    .map(a => ({ date: a.periodo, medianPrecoM2: a.precoM2Mediano, count: a.count }));
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -89,11 +114,12 @@ export async function fetchTransactionCount(params: {
     return info;
   } catch {
     if (DEMO_MODE) {
-      const { MOCK_TRANSACTIONS } = await getMocks();
+      const stats = await loadItbiStats();
+      const total = stats.reduce((s, a) => s + a.count, 0);
       const info: DataSourceInfo = {
         source: 'mock',
-        total: MOCK_TRANSACTIONS.length,
-        filtered: MOCK_TRANSACTIONS.length,
+        total,
+        filtered: total,
       };
       _lastDataSource = info;
       return info;
@@ -153,8 +179,8 @@ export async function fetchTransactions(params: {
     }));
   } catch {
     if (DEMO_MODE) {
-      const { MOCK_TRANSACTIONS } = await getMocks();
-      let data = [...MOCK_TRANSACTIONS];
+      const sample = await loadItbiSample() as TransacaoITBI[];
+      let data = [...sample];
       if (params.dataInicio) data = data.filter(t => t.dataTransacao >= params.dataInicio!);
       if (params.dataFim) data = data.filter(t => t.dataTransacao <= params.dataFim!);
       if (params.precoM2Min) data = data.filter(t => t.precoM2 !== null && t.precoM2 >= params.precoM2Min!);
@@ -177,8 +203,8 @@ export async function fetchNeighborhoods(): Promise<{ neighborhoods: Neighborhoo
     return await fetchJson('/api/v1/market/neighborhoods');
   } catch {
     if (DEMO_MODE) {
-      const { MOCK_NEIGHBORHOOD_STATS } = await getMocks();
-      return { neighborhoods: MOCK_NEIGHBORHOOD_STATS, boundaries: null };
+      const stats = await loadItbiStats();
+      return { neighborhoods: aggregatesToNeighborhoods(stats), boundaries: null };
     }
     return { neighborhoods: [], boundaries: null };
   }
@@ -194,8 +220,8 @@ export async function fetchPriceEvolution(bairro: string, freq = 'monthly'): Pro
     return data.data;
   } catch {
     if (DEMO_MODE) {
-      const { getMockPriceEvolution } = await getMocks();
-      return getMockPriceEvolution(bairro);
+      const stats = await loadItbiStats();
+      return aggregatesToEvolution(stats, bairro);
     }
     return [];
   }
@@ -209,20 +235,22 @@ export async function fetchMarketStats(bbox?: string): Promise<MarketStats> {
     return await fetchJson(`/api/v1/market/stats${qs}`);
   } catch {
     if (DEMO_MODE) {
-      const { MOCK_TRANSACTIONS, MOCK_NEIGHBORHOOD_STATS } = await getMocks();
-      const prices = MOCK_TRANSACTIONS.filter(t => t.precoM2).map(t => t.precoM2!);
-      prices.sort((a, b) => a - b);
+      const stats = await loadItbiStats();
+      const neighborhoods = aggregatesToNeighborhoods(stats);
+      neighborhoods.sort((a, b) => (b.precoM2Medio ?? 0) - (a.precoM2Medio ?? 0));
+      const total = stats.reduce((s, a) => s + a.count, 0);
+      const allPrices = stats.map(a => a.precoM2Medio).filter(Boolean).sort((a, b) => a - b);
       return {
-        totalTransacoes: MOCK_TRANSACTIONS.length,
-        precoM2Medio: Math.round(prices.reduce((s, p) => s + p, 0) / prices.length),
-        precoM2Min: prices[0],
-        precoM2Max: prices[prices.length - 1],
-        topBairros: MOCK_NEIGHBORHOOD_STATS.slice(0, 5).map(n => ({
+        totalTransacoes: total,
+        precoM2Medio: allPrices.length ? Math.round(allPrices.reduce((s, p) => s + p, 0) / allPrices.length) : null,
+        precoM2Min: allPrices[0] ?? null,
+        precoM2Max: allPrices[allPrices.length - 1] ?? null,
+        topBairros: neighborhoods.slice(0, 5).map(n => ({
           bairro: n.bairro,
           precoM2: n.precoM2Medio || 0,
           qtd: n.qtdTransacoes,
         })),
-        bottomBairros: [...MOCK_NEIGHBORHOOD_STATS].reverse().slice(0, 5).map(n => ({
+        bottomBairros: [...neighborhoods].reverse().slice(0, 5).map(n => ({
           bairro: n.bairro,
           precoM2: n.precoM2Medio || 0,
           qtd: n.qtdTransacoes,
@@ -248,8 +276,19 @@ export async function fetchYieldMap(): Promise<YieldBairro[]> {
     return data.yieldData;
   } catch {
     if (DEMO_MODE) {
-      const { MOCK_YIELD_DATA } = await getMocks();
-      return MOCK_YIELD_DATA;
+      // Derive yield estimates from ITBI aggregates + FipeZAP rental data
+      const stats = await loadItbiStats();
+      const neighborhoods = aggregatesToNeighborhoods(stats);
+      return neighborhoods.slice(0, 30).map(n => ({
+        bairro: n.bairro,
+        precoM2Compra: n.precoM2Medio ?? 0,
+        aluguelM2Estimado: (n.precoM2Medio ?? 0) * 0.004, // ~0.4% monthly yield estimate
+        yieldAnualPct: 4.8,
+        yieldMensalPct: 0.4,
+        qtdTransacoes: n.qtdTransacoes,
+        centroLat: n.centroLat,
+        centroLng: n.centroLng,
+      }));
     }
     return [];
   }
@@ -271,8 +310,8 @@ export async function fetchTimeSeries(periodo: string, tipo?: string): Promise<T
     }));
   } catch {
     if (DEMO_MODE) {
-      const { MOCK_TRANSACTIONS } = await getMocks();
-      return MOCK_TRANSACTIONS.filter(t => t.dataTransacao.startsWith(periodo));
+      const sample = await loadItbiSample() as TransacaoITBI[];
+      return sample.filter(t => t.dataTransacao.startsWith(periodo));
     }
     return [];
   }
