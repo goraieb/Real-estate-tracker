@@ -98,7 +98,7 @@ function applyFilter(dados: DadosMercadoBairro[], filtro: MapFilter): { bairro: 
       filtered = filtered.filter(p => p.condicao === filtro.condicao);
     }
     if (filtro.quartos !== 'todos') {
-      filtered = filtered.filter(p => p.quartos === filtro.quartos);
+      filtered = filtered.filter(p => filtro.quartos === 4 ? p.quartos >= 4 : p.quartos === filtro.quartos);
     }
 
     if (filtered.length === 0) {
