@@ -12,6 +12,10 @@ import { PropertyForm } from './components/PropertyForm';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { FinancingSimulator } from './components/FinancingSimulator';
 import { MarketExplorer } from './components/MarketExplorer';
+import { EconomicIndicators } from './components/EconomicIndicators';
+import { FipeZapChart } from './components/FipeZapChart';
+import { NeighborhoodScorecard } from './components/NeighborhoodScorecard';
+import { MarketTimingDashboard } from './components/MarketTimingDashboard';
 import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
 import { MOCK_MARKET_DATA } from './services/mockMarketData';
@@ -150,6 +154,10 @@ function App() {
         />
       ) : activeTab === 'evolution' ? (
         <div className="evolution-page">
+          <MarketTimingDashboard />
+          <NeighborhoodScorecard />
+          <EconomicIndicators />
+          <FipeZapChart />
           <PortfolioEvolution imoveis={imoveis} benchmarks={benchmarks} />
           <EquityDebtChart imoveis={imoveis} benchmarks={benchmarks} />
         </div>

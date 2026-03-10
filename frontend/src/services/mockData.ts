@@ -1,12 +1,8 @@
 import type { Imovel, Benchmarks, SnapshotMensal } from '../types';
+import { getRealBenchmarks } from './realData';
 
-export const MOCK_BENCHMARKS: Benchmarks = {
-  selicAnual: 13.25,
-  ipca12m: 4.87,
-  igpm12m: 3.52,
-  poupancaAnual: 6.17,
-  financiamentoTx: 10.49,
-};
+// Real benchmark data computed from actual BCB/IBGE/FGV indicators (2020–2026)
+export const MOCK_BENCHMARKS: Benchmarks = getRealBenchmarks();
 
 // Helper: generate monthly snapshots from purchase to today
 function gerarSnapshots(
