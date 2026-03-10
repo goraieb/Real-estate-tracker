@@ -156,7 +156,7 @@ export async function fetchTransactions(params: {
     _lastDataSource = { source: 'mock', total: data.length };
 
     const start = params.offset || 0;
-    const limit = params.limit || 5000;
+    const limit = params.limit || 100_000;
     return data.slice(start, start + limit);
   }
 }

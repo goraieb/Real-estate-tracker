@@ -276,8 +276,41 @@ class ITBIDownloader:
         return records
 
 
+def _assign_bairro_center_coords(rec: dict) -> dict:
+    """Assign approximate lat/lng from bairro center + random offset.
+
+    This enables immediate map display without waiting for Nominatim geocoding.
+    Records are marked as geocoded=1 so the API can serve them right away.
+    """
+    from ..services.geo_boundaries import get_bairro_center
+
+    bairro = rec.get("bairro")
+    if not bairro:
+        return rec
+
+    center = get_bairro_center(bairro)
+    if not center:
+        return rec
+
+    # Deterministic offset based on record content to spread points within bairro
+    import hashlib
+
+    seed_str = f"{bairro}:{rec.get('logradouro', '')}:{rec.get('valor_transacao', '')}:{rec.get('data_transacao', '')}"
+    h = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
+    lat_offset = ((h % 1000) / 1000 - 0.5) * 0.02
+    lng_offset = (((h >> 12) % 1000) / 1000 - 0.5) * 0.02
+
+    rec["latitude"] = center[0] + lat_offset
+    rec["longitude"] = center[1] + lng_offset
+    rec["geocoded"] = 1
+    return rec
+
+
 async def insert_transactions(records: list[dict]) -> int:
     """Insert transaction records into the database.
+
+    Automatically assigns approximate coordinates from bairro centers
+    so records are immediately visible on the map.
 
     Args:
         records: List of transaction dicts.
@@ -294,13 +327,17 @@ async def insert_transactions(records: list[dict]) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         inserted = 0
         for rec in records:
+            # Assign bairro-center coordinates for immediate map display
+            rec = _assign_bairro_center_coords(rec)
+
             try:
                 await db.execute(
                     """INSERT OR IGNORE INTO transacoes_itbi
                     (cidade, bairro, logradouro, numero, sql_cadastral,
                      tipo_imovel, area_construida, area_terreno,
-                     valor_transacao, preco_m2, data_transacao, fonte)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     valor_transacao, preco_m2, data_transacao, fonte,
+                     latitude, longitude, geocoded)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         rec["cidade"],
                         rec.get("bairro"),
@@ -314,6 +351,9 @@ async def insert_transactions(records: list[dict]) -> int:
                         rec.get("preco_m2"),
                         rec["data_transacao"],
                         rec.get("fonte", "prefeitura_sp"),
+                        rec.get("latitude"),
+                        rec.get("longitude"),
+                        rec.get("geocoded", 0),
                     ),
                 )
                 inserted += 1

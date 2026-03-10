@@ -145,7 +145,7 @@ async def get_transactions(
     preco_m2_min: Optional[float] = Query(None),
     preco_m2_max: Optional[float] = Query(None),
     bairro: Optional[str] = Query(None),
-    limit: int = Query(5000, le=10000),
+    limit: int = Query(5000, le=1_000_000),
     offset: int = Query(0, ge=0),
 ):
     """Get geocoded ITBI transactions as GeoJSON FeatureCollection."""
@@ -223,7 +223,6 @@ async def get_neighborhoods():
             FROM transacoes_itbi
             WHERE preco_m2 IS NOT NULL AND preco_m2 BETWEEN 500 AND 150000
             GROUP BY bairro
-            HAVING qtd_transacoes >= 3
             ORDER BY preco_m2_medio DESC"""
         )
     except Exception:
@@ -235,7 +234,6 @@ async def get_neighborhoods():
             FROM transacoes_itbi
             WHERE preco_m2 IS NOT NULL AND preco_m2 BETWEEN 500 AND 150000
             GROUP BY bairro
-            HAVING qtd_transacoes >= 3
             ORDER BY preco_m2_medio DESC"""
         )
 
@@ -283,7 +281,6 @@ async def get_price_evolution(
             FROM transacoes_itbi
             WHERE bairro LIKE ? AND preco_m2 BETWEEN 500 AND 150000
             GROUP BY periodo
-            HAVING qtd_transacoes >= 2
             ORDER BY periodo""",
             (f"%{bairro}%",),
         )
@@ -341,7 +338,6 @@ async def get_market_stats(
             FROM transacoes_itbi
             WHERE {where} AND bairro IS NOT NULL
             GROUP BY bairro
-            HAVING qtd >= 3
             ORDER BY preco_m2_medio DESC
             LIMIT 5""",
             params,
@@ -356,7 +352,6 @@ async def get_market_stats(
             FROM transacoes_itbi
             WHERE {where} AND bairro IS NOT NULL
             GROUP BY bairro
-            HAVING qtd >= 3
             ORDER BY preco_m2_medio ASC
             LIMIT 5""",
             params,
@@ -394,8 +389,7 @@ async def get_yield_map():
                       COUNT(*) as qtd
             FROM transacoes_itbi
             WHERE preco_m2 BETWEEN 500 AND 150000 AND bairro IS NOT NULL
-            GROUP BY bairro
-            HAVING qtd >= 3"""
+            GROUP BY bairro"""
         )
         rows = await cursor.fetchall()
 
@@ -466,7 +460,7 @@ async def get_time_series_geo(
                        data_transacao
             FROM transacoes_itbi
             WHERE {where}
-            LIMIT 5000""",
+            LIMIT 1000000""",
             params,
         )
         rows = await cursor.fetchall()
