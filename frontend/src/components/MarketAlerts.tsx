@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Bell, Plus, Trash2, Star, AlertTriangle } from 'lucide-react';
 import type { MarketAlert } from '../types';
 import { createAlert, deleteAlert } from '../services/marketApi';
-import { MOCK_BAIRRO_NAMES } from '../services/mockTransactions';
+import { SP_BAIRRO_NAMES } from '../services/staticData';
 
 interface Props {
   alerts: MarketAlert[];
@@ -74,7 +74,7 @@ export function MarketAlerts({ alerts, onAlertsChange, watchedBairros, onToggleW
             className="mf-input"
           >
             <option value="">Selecione o bairro</option>
-            {MOCK_BAIRRO_NAMES.map(b => (
+            {SP_BAIRRO_NAMES.map(b => (
               <option key={b} value={b}>{b}</option>
             ))}
           </select>

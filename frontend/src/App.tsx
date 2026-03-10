@@ -18,7 +18,7 @@ import { NeighborhoodScorecard } from './components/NeighborhoodScorecard';
 import { MarketTimingDashboard } from './components/MarketTimingDashboard';
 import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
-import { MOCK_MARKET_DATA } from './services/mockMarketData';
+import { MOCK_MARKET_DATA } from './services/fipezapData';
 import { TAXA_ADMINISTRACAO_PCT } from './config';
 import type { Imovel, MapFilter } from './types';
 import './App.css';
@@ -96,7 +96,7 @@ function App() {
       {isDemo && (
         <div className="demo-banner">
           <Info size={16} />
-          <span>Modo demonstração — dados fictícios, alterações não são salvas</span>
+          <span>Dados reais — alterações não são salvas nesta versão</span>
         </div>
       )}
       {/* Header */}
