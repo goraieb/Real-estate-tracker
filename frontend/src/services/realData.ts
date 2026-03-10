@@ -1,10 +1,11 @@
 /**
- * Real economic indicator data for Brazil (2020–2026).
+ * Real economic indicator data for Brazil (2019–2026).
  *
  * Sources:
  *   - Selic (target rate): BCB / COPOM decisions
  *   - IPCA (monthly % change): IBGE
  *   - IGP-M (monthly % change): FGV IBRE
+ *   - FipeZAP (national venda residencial index): FIPE / DataZAP
  *
  * Last updated: March 2026
  */
@@ -14,6 +15,12 @@
 // Each entry is the effective date and the new target rate (% p.a.)
 // ---------------------------------------------------------------------------
 export const SELIC_HISTORY: { date: string; rate: number }[] = [
+  // 2019 — easing cycle, 4 consecutive 50bps cuts
+  { date: '2019-01-01', rate: 6.50 },  // held from Mar 2018
+  { date: '2019-07-31', rate: 6.00 },
+  { date: '2019-09-18', rate: 5.50 },
+  { date: '2019-10-30', rate: 5.00 },
+  { date: '2019-12-11', rate: 4.50 },
   // 2020 — pandemic-era cuts to historic low of 2%
   { date: '2020-02-06', rate: 4.25 },
   { date: '2020-03-18', rate: 3.75 },
@@ -60,6 +67,19 @@ export const SELIC_HISTORY: { date: string; rate: number }[] = [
 // Source: IBGE (Índice Nacional de Preços ao Consumidor Amplo)
 // ---------------------------------------------------------------------------
 export const IPCA_MONTHLY: { date: string; value: number }[] = [
+  // 2019 — acumulado: 4.31%
+  { date: '2019-01', value: 0.32 },
+  { date: '2019-02', value: 0.43 },
+  { date: '2019-03', value: 0.75 },
+  { date: '2019-04', value: 0.57 },
+  { date: '2019-05', value: 0.13 },
+  { date: '2019-06', value: 0.01 },
+  { date: '2019-07', value: 0.19 },
+  { date: '2019-08', value: 0.11 },
+  { date: '2019-09', value: -0.04 },
+  { date: '2019-10', value: 0.10 },
+  { date: '2019-11', value: 0.51 },
+  { date: '2019-12', value: 1.15 },
   // 2020
   { date: '2020-01', value: 0.21 },
   { date: '2020-02', value: 0.25 },
@@ -147,6 +167,19 @@ export const IPCA_MONTHLY: { date: string; value: number }[] = [
 // Source: FGV IBRE (Fundação Getúlio Vargas)
 // ---------------------------------------------------------------------------
 export const IGPM_MONTHLY: { date: string; value: number }[] = [
+  // 2019 — acumulado: ~7.32%
+  { date: '2019-01', value: 0.01 },
+  { date: '2019-02', value: 0.88 },
+  { date: '2019-03', value: 1.26 },
+  { date: '2019-04', value: 0.92 },
+  { date: '2019-05', value: 0.45 },
+  { date: '2019-06', value: 0.80 },
+  { date: '2019-07', value: 0.40 },
+  { date: '2019-08', value: -0.67 },
+  { date: '2019-09', value: -0.01 },
+  { date: '2019-10', value: 0.68 },
+  { date: '2019-11', value: 0.30 },
+  { date: '2019-12', value: 2.09 },
   // 2020
   { date: '2020-01', value: 0.48 },
   { date: '2020-02', value: -0.04 },
@@ -307,7 +340,7 @@ export function getRealBenchmarks() {
 /** Monthly Selic series (for charts): interpolate rate at each month. */
 export function getSelicMonthlySeries(): { date: string; value: number }[] {
   const result: { date: string; value: number }[] = [];
-  const startDate = new Date(2020, 0, 1);
+  const startDate = new Date(2019, 0, 1);
   const endDate = new Date(2026, 1, 1);
 
   for (let d = new Date(startDate); d <= endDate; d.setMonth(d.getMonth() + 1)) {

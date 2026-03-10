@@ -175,7 +175,7 @@ export function EconomicIndicators() {
 
   return (
     <div className="economic-indicators-panel">
-      <h4>Indicadores Econômicos (dados reais 2020–2026)</h4>
+      <h4>Indicadores Econômicos (dados reais 2019–2026)</h4>
 
       <div className="indicator-summary">
         <div className="indicator-pill">
@@ -215,7 +215,7 @@ export function EconomicIndicators() {
       </div>
 
       <p className="data-source-note">
-        Fonte: BCB (Selic), IBGE (IPCA), FGV IBRE (IGP-M) — dados reais de jan/2020 a fev/2026
+        Fonte: BCB (Selic), IBGE (IPCA), FGV IBRE (IGP-M) — dados reais de jan/2019 a fev/2026
       </p>
     </div>
   );

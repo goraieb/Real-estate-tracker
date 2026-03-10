@@ -13,6 +13,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { FinancingSimulator } from './components/FinancingSimulator';
 import { MarketExplorer } from './components/MarketExplorer';
 import { EconomicIndicators } from './components/EconomicIndicators';
+import { FipeZapChart } from './components/FipeZapChart';
 import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
 import { MOCK_MARKET_DATA } from './services/mockMarketData';
@@ -152,6 +153,7 @@ function App() {
       ) : activeTab === 'evolution' ? (
         <div className="evolution-page">
           <EconomicIndicators />
+          <FipeZapChart />
           <PortfolioEvolution imoveis={imoveis} benchmarks={benchmarks} />
           <EquityDebtChart imoveis={imoveis} benchmarks={benchmarks} />
         </div>
