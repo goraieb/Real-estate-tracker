@@ -21,6 +21,7 @@ async def init_db(db_path: Path | None = None):
     path = db_path or DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     db = await aiosqlite.connect(path)
+    await db.execute("PRAGMA foreign_keys=ON")
     schema = SCHEMA_PATH.read_text()
     await db.executescript(schema)
     await db.close()

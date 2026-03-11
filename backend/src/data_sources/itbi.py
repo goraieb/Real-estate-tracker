@@ -112,24 +112,48 @@ class ITBIParser:
         return df
 
     def _detect_columns_sp(self, columns: list[str]) -> dict:
-        """Detecta e mapeia colunas do arquivo SP para nomes padronizados."""
+        """Detecta e mapeia colunas do arquivo SP para nomes padronizados.
+
+        Uses a two-pass strategy: exact match first, then startswith fallback.
+        Candidates are ordered most-specific-first to avoid false positives
+        from short strings like "data", "valor", "area" matching unrelated columns.
+        """
         mapping = {}
         patterns = {
-            "valor_transacao": ["valor", "vl_transacao", "valor_transacao", "vl_lancamento"],
-            "data_transacao": ["data", "dt_transacao", "data_transacao", "dt_lancamento"],
+            "valor_transacao": ["valor_transacao", "vl_transacao", "vl_lancamento", "valor"],
+            "data_transacao": ["data_transacao", "dt_transacao", "dt_lancamento", "data"],
             "endereco": ["endereco", "logradouro", "endereco_imovel"],
             "bairro": ["bairro", "distrito", "subdistrito"],
-            "area_construida": ["area", "area_construida", "area_util", "ac"],
+            "area_construida": ["area_construida", "area_util", "area", "ac"],
             "area_terreno": ["area_terreno", "at"],
-            "sql": ["sql", "setor_quadra_lote", "inscricao"],
-            "tipo_imovel": ["tipo", "tipo_imovel", "finalidade", "uso"],
+            "sql": ["setor_quadra_lote", "inscricao", "sql"],
+            "tipo_imovel": ["tipo_imovel", "finalidade", "uso", "tipo"],
         }
 
+        mapped_cols: set = set()
+
+        # Pass 1: exact match only (highest confidence)
         for target, candidates in patterns.items():
             for col in columns:
+                if col in mapped_cols:
+                    continue
                 col_str = str(col).lower().strip() if not isinstance(col, float) else ""
-                if col_str and (col_str in candidates or any(c in col_str for c in candidates)):
+                if col_str and col_str in candidates:
                     mapping[col] = target
+                    mapped_cols.add(col)
+                    break
+
+        # Pass 2: startswith match for remaining unmapped targets
+        for target, candidates in patterns.items():
+            if target in mapping.values():
+                continue
+            for col in columns:
+                if col in mapped_cols:
+                    continue
+                col_str = str(col).lower().strip() if not isinstance(col, float) else ""
+                if col_str and any(col_str.startswith(c) for c in candidates):
+                    mapping[col] = target
+                    mapped_cols.add(col)
                     break
 
         return mapping

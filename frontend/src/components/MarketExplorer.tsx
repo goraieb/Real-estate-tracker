@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Star } from 'lucide-react';
@@ -9,7 +9,10 @@ import { PriceEvolutionChart } from './PriceEvolutionChart';
 import { TimeLapseControls } from './TimeLapseControls';
 import { MarketAlerts } from './MarketAlerts';
 import { useTimeLapse } from '../hooks/useTimeLapse';
-// useThemeColors used by child components
+import { MapViewportTracker, getZoomTier, type MapViewport } from './MapViewportTracker';
+import { useCluster } from '../hooks/useCluster';
+import { ClusterLayer } from './ClusterLayer';
+import { priceToColor, yieldToColor } from '../utils/colors';
 
 interface Props {
   userProperties: Imovel[];
@@ -17,36 +20,26 @@ interface Props {
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-// Price/m² → color gradient: blue (low) → yellow (mid) → red (high)
-function priceToColor(precoM2: number): string {
-  if (precoM2 <= 5000) return '#3b82f6';
-  if (precoM2 <= 8000) return '#06b6d4';
-  if (precoM2 <= 11000) return '#22c55e';
-  if (precoM2 <= 14000) return '#eab308';
-  if (precoM2 <= 18000) return '#f97316';
-  return '#ef4444';
+/** Compute last day of a YYYY-MM string (e.g. "2024-02" → "2024-02-29") */
+function lastDayOfMonth(yearMonth: string): string {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return `${yearMonth}-${String(last).padStart(2, '0')}`;
 }
 
-// Yield % → color: red (low) → yellow → green (high)
-function yieldToColor(yieldPct: number): string {
-  if (yieldPct <= 4.0) return '#ef4444';
-  if (yieldPct <= 5.0) return '#f97316';
-  if (yieldPct <= 5.5) return '#eab308';
-  if (yieldPct <= 6.0) return '#84cc16';
-  if (yieldPct <= 7.0) return '#22c55e';
-  return '#16a34a';
-}
-
-// Fit map to transaction bounds
-function FitTransactions({ transactions }: { transactions: TransacaoITBI[] }) {
+// Fit map to neighborhood bounds (once on initial load, uses lightweight neighborhood centers)
+function FitNeighborhoods({ neighborhoods, hasFitted }: { neighborhoods: NeighborhoodStats[]; hasFitted: React.MutableRefObject<boolean> }) {
   const map = useMap();
   useEffect(() => {
-    if (transactions.length === 0) return;
+    if (hasFitted.current) return;
+    const points = neighborhoods.filter(n => n.centroLat && n.centroLng);
+    if (points.length === 0) return;
     const bounds = L.latLngBounds(
-      transactions.map(t => L.latLng(t.latitude, t.longitude))
+      points.map(n => L.latLng(n.centroLat!, n.centroLng!))
     );
     map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
-  }, [map, transactions]);
+    hasFitted.current = true;
+  }, [map, neighborhoods, hasFitted]);
   return null;
 }
 
@@ -76,29 +69,27 @@ export function MarketExplorer({ userProperties }: Props) {
   const [showTimeLapse, setShowTimeLapse] = useState(false);
   const [dataSource, setDataSource] = useState<DataSourceInfo>({ source: 'mock', total: 0 });
 
+  // Viewport tracking for LOD
+  const [viewport, setViewport] = useState<MapViewport>({ zoom: 12, bounds: null, bboxString: null });
+  const zoomTier = useMemo(() => getZoomTier(viewport.zoom), [viewport.zoom]);
+  const hasFitted = useRef(false);
+
   const timeLapse = useTimeLapse(filters.dataInicio, filters.dataFim);
 
-  // Load initial data
+  // Load initial reference data (neighborhoods, yield, alerts, stats)
   useEffect(() => {
-    async function load() {
+    async function loadReference() {
       setIsLoading(true);
-      const [txns, nbhd, yld, alertsData, statsData, countData] = await Promise.all([
-        fetchTransactions({
-          dataInicio: filters.dataInicio ? `${filters.dataInicio}-01` : undefined,
-          dataFim: filters.dataFim ? `${filters.dataFim}-28` : undefined,
-          precoM2Min: filters.precoM2Min || undefined,
-          precoM2Max: filters.precoM2Max < 50000 ? filters.precoM2Max : undefined,
-        }),
+      const [nbhd, yld, alertsData, statsData, countData] = await Promise.all([
         fetchNeighborhoods(),
         fetchYieldMap(),
         fetchAlerts(),
         fetchMarketStats(),
         fetchTransactionCount({
           dataInicio: filters.dataInicio ? `${filters.dataInicio}-01` : undefined,
-          dataFim: filters.dataFim ? `${filters.dataFim}-28` : undefined,
+          dataFim: filters.dataFim ? lastDayOfMonth(filters.dataFim) : undefined,
         }),
       ]);
-      setTransactions(txns);
       setNeighborhoods(nbhd.neighborhoods);
       setYieldData(yld);
       setAlerts(alertsData);
@@ -106,8 +97,36 @@ export function MarketExplorer({ userProperties }: Props) {
       setDataSource(countData);
       setIsLoading(false);
     }
-    load();
-  }, [filters.dataInicio, filters.dataFim, filters.precoM2Min, filters.precoM2Max]);
+    loadReference();
+  }, [filters.dataInicio, filters.dataFim]);
+
+  // Viewport-driven transaction loading (only when zoom > city tier)
+  useEffect(() => {
+    if (zoomTier === 'city' || !viewport.bboxString) return;
+    if (showTimeLapse) return; // time-lapse manages its own transactions
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const txns = await fetchTransactions({
+        bbox: viewport.bboxString!,
+        dataInicio: filters.dataInicio ? `${filters.dataInicio}-01` : undefined,
+        dataFim: filters.dataFim ? lastDayOfMonth(filters.dataFim) : undefined,
+        precoM2Min: filters.precoM2Min || undefined,
+        precoM2Max: filters.precoM2Max < 50000 ? filters.precoM2Max : undefined,
+        // Street bbox is small → ~500-5K results naturally. Region is wider → cap at 50K.
+        // Supercluster handles 50K points with no lag.
+        limit: zoomTier === 'street' ? 10000 : 50000,
+      });
+      if (!controller.signal.aborted) setTransactions(txns);
+    }, 300);
+
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [viewport.bboxString, zoomTier, showTimeLapse, filters.dataInicio, filters.dataFim, filters.precoM2Min, filters.precoM2Max]);
+
+  // Clear transactions when zooming to city tier (neighborhood stats handle it)
+  useEffect(() => {
+    if (zoomTier === 'city') setTransactions([]);
+  }, [zoomTier]);
 
   // Filter transactions by tipo if set
   const filteredTransactions = useMemo(() => {
@@ -117,6 +136,15 @@ export function MarketExplorer({ userProperties }: Props) {
     }
     return data;
   }, [transactions, filters.tipoImovel, showTimeLapse, timeLapse.currentTransactions]);
+
+  // Cluster data for region tier
+  const clusterData = useCluster(filteredTransactions, viewport.zoom, viewport.bounds);
+
+  // Max transaction count for heatmap scaling
+  const maxTransactions = useMemo(
+    () => Math.max(1, ...neighborhoods.map(n => n.qtdTransacoes)),
+    [neighborhoods],
+  );
 
   const activeLayers = filters.activeLayers;
   const hasLayer = useCallback((l: MarketLayer) => activeLayers.includes(l), [activeLayers]);
@@ -151,6 +179,8 @@ export function MarketExplorer({ userProperties }: Props) {
   }, [neighborhoods]);
 
   const center: [number, number] = [-23.5505, -46.6333]; // São Paulo center
+
+  const tierLabel = zoomTier === 'city' ? 'Visão Geral' : zoomTier === 'region' ? 'Região' : 'Rua';
 
   return (
     <div className="market-explorer">
@@ -206,6 +236,9 @@ export function MarketExplorer({ userProperties }: Props) {
             )}
             {dataSource.source === 'mock' && <> (2019–2025)</>}
           </span>
+          <span className="me-source-badge me-source-demo" style={{ marginLeft: 4, fontSize: 10 }}>
+            {tierLabel}
+          </span>
         </div>
 
         {/* Map */}
@@ -218,10 +251,18 @@ export function MarketExplorer({ userProperties }: Props) {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {filteredTransactions.length > 0 && <FitTransactions transactions={filteredTransactions} />}
+            <MapViewportTracker onViewportChange={setViewport} />
+            {neighborhoods.length > 0 && <FitNeighborhoods neighborhoods={neighborhoods} hasFitted={hasFitted} />}
 
-            {/* Layer: Transaction clusters (as circle markers) */}
-            {hasLayer('clusters') && filteredTransactions.map(t => (
+            {/* Layer: Transactions — tier-dependent rendering */}
+
+            {/* Region tier: clustered circles */}
+            {hasLayer('clusters') && zoomTier === 'region' && (
+              <ClusterLayer clusters={clusterData} />
+            )}
+
+            {/* Street tier: individual markers */}
+            {hasLayer('clusters') && zoomTier === 'street' && filteredTransactions.map(t => (
               <CircleMarker
                 key={t.id}
                 center={[t.latitude, t.longitude]}
@@ -249,6 +290,29 @@ export function MarketExplorer({ userProperties }: Props) {
                 </Tooltip>
               </CircleMarker>
             ))}
+
+            {/* Layer: Heatmap (city tier — transaction density) */}
+            {hasLayer('heatmap') && zoomTier === 'city' && neighborhoods.map(n => {
+              if (!n.centroLat || !n.centroLng) return null;
+              return (
+                <CircleMarker
+                  key={`heat-${n.bairro}`}
+                  center={[n.centroLat, n.centroLng]}
+                  radius={10 + Math.log2(Math.max(1, n.qtdTransacoes)) * 3}
+                  pathOptions={{
+                    fillColor: '#ef4444',
+                    fillOpacity: Math.min(0.7, n.qtdTransacoes / maxTransactions * 0.8),
+                    stroke: false,
+                  }}
+                >
+                  <Tooltip>
+                    <div style={{ fontSize: 12 }}>
+                      <strong>{n.bairro}</strong>: {n.qtdTransacoes} transações
+                    </div>
+                  </Tooltip>
+                </CircleMarker>
+              );
+            })}
 
             {/* Layer: Choropleth (price by neighborhood) */}
             {hasLayer('choropleth') && neighborhoods.map(n => {
@@ -290,7 +354,7 @@ export function MarketExplorer({ userProperties }: Props) {
               );
             })}
 
-            {/* Layer: Yield heatmap */}
+            {/* Layer: Yield */}
             {hasLayer('yield') && yieldData.map(y => {
               if (!y.centroLat || !y.centroLng) return null;
               return (
@@ -326,7 +390,7 @@ export function MarketExplorer({ userProperties }: Props) {
               );
             })}
 
-            {/* Layer: Portfolio overlay */}
+            {/* Layer: Portfolio overlay (always visible) */}
             {hasLayer('portfolio') && portfolioMarkers.map(p => {
               const appreciation = getAppreciation(p.bairro, p.precoM2Compra);
               return (
@@ -369,7 +433,15 @@ export function MarketExplorer({ userProperties }: Props) {
 
           {/* Legend */}
           <div className="me-legend">
-            {hasLayer('clusters') && (
+            {hasLayer('clusters') && zoomTier === 'region' && (
+              <div className="me-legend-section">
+                <span className="me-legend-title">Clusters</span>
+                <div className="me-legend-gradient">
+                  <span>Tamanho = qtd. transações</span>
+                </div>
+              </div>
+            )}
+            {(hasLayer('clusters') || hasLayer('choropleth')) && (
               <div className="me-legend-section">
                 <span className="me-legend-title">R$/m²</span>
                 <div className="me-legend-gradient">
@@ -377,6 +449,15 @@ export function MarketExplorer({ userProperties }: Props) {
                   <span><span className="legend-dot" style={{ background: '#22c55e' }} /> 8-11K</span>
                   <span><span className="legend-dot" style={{ background: '#eab308' }} /> 11-14K</span>
                   <span><span className="legend-dot" style={{ background: '#ef4444' }} /> ≥18K</span>
+                </div>
+              </div>
+            )}
+            {hasLayer('heatmap') && (
+              <div className="me-legend-section">
+                <span className="me-legend-title">Densidade</span>
+                <div className="me-legend-gradient">
+                  <span><span className="legend-dot" style={{ background: '#ef4444', opacity: 0.3 }} /> Baixa</span>
+                  <span><span className="legend-dot" style={{ background: '#ef4444', opacity: 0.7 }} /> Alta</span>
                 </div>
               </div>
             )}

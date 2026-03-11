@@ -64,7 +64,7 @@ function gerarSnapshots(
     }
 
     const equity = valorEstimado - Math.round(saldoDevedor);
-    const aluguel = aluguelMensal ? Math.round(aluguelMensal * (1 - vacanciaPct / 100)) : 0;
+    const aluguel = (m > 0 && aluguelMensal) ? Math.round(aluguelMensal * (1 - vacanciaPct / 100)) : 0;
 
     snapshots.push({ data: mes, valorEstimado, saldoDevedor: Math.round(saldoDevedor), equity, aluguelRecebido: aluguel });
   }
@@ -185,6 +185,14 @@ export const SP_BAIRRO_NAMES = [
   'Vila Leopoldina', 'Vila Madalena', 'Vila Mariana', 'Vila Olímpia', 'Vila Prudente',
   'Vila Sônia',
 ];
+
+export async function loadBairroCenters(): Promise<Record<string, { lat: number; lng: number }>> {
+  try {
+    return await loadJson<Record<string, { lat: number; lng: number }>>('bairro_centers.json');
+  } catch {
+    return {};
+  }
+}
 
 export async function loadMetadata(): Promise<DataMetadata | null> {
   try {

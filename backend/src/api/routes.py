@@ -22,6 +22,7 @@ from ..database.repository import ImovelRepository
 from ..services.yield_calc import YieldService
 from ..services.benchmark import BenchmarkService
 from ..services.financing import FinancingService
+from ..utils.sql_helpers import escape_like
 from .market_routes import router as market_router
 from .data_routes import router as data_router
 
@@ -33,9 +34,14 @@ app = FastAPI(
     version="0.2.0",
 )
 
+import os
+
+cors_origins = os.environ.get(
+    "CORS_ORIGINS", "http://localhost:5173,http://localhost:3000"
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -439,9 +445,9 @@ async def market_comparison(imovel_id: str):
                       MIN(preco_m2) as preco_m2_min,
                       MAX(preco_m2) as preco_m2_max
             FROM transacoes_itbi
-            WHERE bairro LIKE ? AND preco_m2 BETWEEN 500 AND 150000
+            WHERE bairro LIKE ? ESCAPE '\\' AND preco_m2 BETWEEN 500 AND 150000
                   AND data_transacao >= date('now', '-6 months')""",
-            (f"%{bairro}%",),
+            (f"%{escape_like(bairro)}%",),
         )
         bairro_stats = await cursor.fetchone()
 
@@ -573,14 +579,20 @@ async def opportunity_cost(imovel_id: str):
 
         # Add rental income to RE return if available
         rental_income_total = 0
+        rental_income_net = 0
         if imovel.get("aluguel_mensal") and data_compra:
             try:
                 from datetime import datetime
                 dt_compra = datetime.strptime(data_compra[:10], "%Y-%m-%d")
                 months_held = max(1, (datetime.now() - dt_compra).days / 30.44)
                 rental_income_total = imovel["aluguel_mensal"] * months_held
+                # Apply simplified rental income tax (carnê-leão avg effective rate ~15%)
+                RENTAL_IR_RATE = 0.15
+                rental_income_net = rental_income_total * (1 - RENTAL_IR_RATE)
             except (ValueError, TypeError):
                 pass
+
+        re_total_pct = re_return + (rental_income_net / valor_compra * 100 if valor_compra else 0)
 
         return {
             "imovel": {
@@ -590,8 +602,9 @@ async def opportunity_cost(imovel_id: str):
                 "valorCompra": valor_compra,
                 "valorAtual": valor_atual,
                 "retornoCapitalPct": round(re_return, 2),
-                "rendaAluguelTotal": round(rental_income_total, 2),
-                "retornoTotalPct": round(re_return + (rental_income_total / valor_compra * 100 if valor_compra else 0), 2),
+                "rendaAluguelBruta": round(rental_income_total, 2),
+                "rendaAluguelLiquida": round(rental_income_net, 2),
+                "retornoTotalPct": round(re_total_pct, 2),
             },
             "counterfactuals": {
                 "cdi": cdi_result,
@@ -600,8 +613,7 @@ async def opportunity_cost(imovel_id: str):
             "verdict": {
                 "melhorOpcao": (
                     "imovel" if (
-                        re_return + (rental_income_total / valor_compra * 100 if valor_compra else 0)
-                        > (cdi_result["retornoLiquidoPct"] if cdi_result else 0)
+                        re_total_pct > (cdi_result["retornoLiquidoPct"] if cdi_result else 0)
                     ) else "cdi"
                 ),
             },

@@ -7,6 +7,7 @@ Docs: http://www.ipeadata.gov.br/api/
 
 from datetime import date
 from typing import Optional
+from urllib.parse import quote
 
 import pandas as pd
 import requests
@@ -86,7 +87,7 @@ class IpeadataClient:
         """
         url = (
             f"{BASE_URL}/Metadados?"
-            f"$filter=contains(SERNOME,'{termo}')"
+            f"$filter=contains(SERNOME,'{quote(termo, safe='')}')"
             f"&$select=SERCODIGO,SERNOME,SERFONTE,SERPERI"
             f"&$top=50"
         )

@@ -22,11 +22,14 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
 
 // Lazy-load static data only in demo mode to avoid bundling it in production
-import { loadItbiStats, loadItbiSample } from './staticData';
+import { loadItbiStats, loadItbiSample, loadBairroCenters } from './staticData';
 import type { ItbiAggregate } from './staticData';
 
 // Convert ITBI aggregates to neighborhood stats format
-function aggregatesToNeighborhoods(aggs: ItbiAggregate[]): NeighborhoodStats[] {
+function aggregatesToNeighborhoods(
+  aggs: ItbiAggregate[],
+  centers: Record<string, { lat: number; lng: number }> = {},
+): NeighborhoodStats[] {
   const byBairro = new Map<string, { count: number; totalPreco: number; precos: number[] }>();
   for (const a of aggs) {
     const existing = byBairro.get(a.bairro) ?? { count: 0, totalPreco: 0, precos: [] };
@@ -39,9 +42,15 @@ function aggregatesToNeighborhoods(aggs: ItbiAggregate[]): NeighborhoodStats[] {
     bairro,
     qtdTransacoes: d.count,
     precoM2Medio: Math.round(d.totalPreco / d.count),
-    precoM2Mediano: d.precos[Math.floor(d.precos.length / 2)] ?? null,
-    centroLat: null,
-    centroLng: null,
+    precoM2Mediano: (() => {
+      const sorted = [...d.precos].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid];
+    })() ?? null,
+    centroLat: centers[bairro]?.lat ?? null,
+    centroLng: centers[bairro]?.lng ?? null,
   }));
 }
 
@@ -181,14 +190,22 @@ export async function fetchTransactions(params: {
     if (DEMO_MODE) {
       const sample = await loadItbiSample() as TransacaoITBI[];
       let data = [...sample];
+      const totalBeforeFilter = data.length;
+      if (params.bbox) {
+        const [south, west, north, east] = params.bbox.split(',').map(Number);
+        data = data.filter(t =>
+          t.latitude >= south && t.latitude <= north &&
+          t.longitude >= west && t.longitude <= east
+        );
+      }
       if (params.dataInicio) data = data.filter(t => t.dataTransacao >= params.dataInicio!);
       if (params.dataFim) data = data.filter(t => t.dataTransacao <= params.dataFim!);
       if (params.precoM2Min) data = data.filter(t => t.precoM2 !== null && t.precoM2 >= params.precoM2Min!);
       if (params.precoM2Max) data = data.filter(t => t.precoM2 !== null && t.precoM2 <= params.precoM2Max!);
       if (params.bairro) data = data.filter(t => t.bairro?.toLowerCase().includes(params.bairro!.toLowerCase()));
-      _lastDataSource = { source: 'mock', total: data.length };
+      _lastDataSource = { source: 'mock', total: totalBeforeFilter, filtered: data.length };
       const start = params.offset || 0;
-      const limit = params.limit || 100_000;
+      const limit = params.limit || 200_000;
       return data.slice(start, start + limit);
     }
     _lastDataSource = { source: 'empty', total: 0 };
@@ -203,8 +220,8 @@ export async function fetchNeighborhoods(): Promise<{ neighborhoods: Neighborhoo
     return await fetchJson('/api/v1/market/neighborhoods');
   } catch {
     if (DEMO_MODE) {
-      const stats = await loadItbiStats();
-      return { neighborhoods: aggregatesToNeighborhoods(stats), boundaries: null };
+      const [stats, centers] = await Promise.all([loadItbiStats(), loadBairroCenters()]);
+      return { neighborhoods: aggregatesToNeighborhoods(stats, centers), boundaries: null };
     }
     return { neighborhoods: [], boundaries: null };
   }
@@ -214,10 +231,14 @@ export async function fetchNeighborhoods(): Promise<{ neighborhoods: Neighborhoo
 
 export async function fetchPriceEvolution(bairro: string, freq = 'monthly'): Promise<PriceEvolutionPoint[]> {
   try {
-    const data = await fetchJson<{ data: PriceEvolutionPoint[] }>(
+    const data = await fetchJson<{ data: Array<{ date: string; avgPrecoM2?: number; medianPrecoM2?: number; count: number }> }>(
       `/api/v1/market/price-evolution?bairro=${encodeURIComponent(bairro)}&freq=${freq}`
     );
-    return data.data;
+    return data.data.map(d => ({
+      date: d.date,
+      medianPrecoM2: d.avgPrecoM2 ?? d.medianPrecoM2 ?? 0,
+      count: d.count,
+    }));
   } catch {
     if (DEMO_MODE) {
       const stats = await loadItbiStats();
@@ -235,8 +256,8 @@ export async function fetchMarketStats(bbox?: string): Promise<MarketStats> {
     return await fetchJson(`/api/v1/market/stats${qs}`);
   } catch {
     if (DEMO_MODE) {
-      const stats = await loadItbiStats();
-      const neighborhoods = aggregatesToNeighborhoods(stats);
+      const [stats, centers] = await Promise.all([loadItbiStats(), loadBairroCenters()]);
+      const neighborhoods = aggregatesToNeighborhoods(stats, centers);
       neighborhoods.sort((a, b) => (b.precoM2Medio ?? 0) - (a.precoM2Medio ?? 0));
       const total = stats.reduce((s, a) => s + a.count, 0);
       const allPrices = stats.map(a => a.precoM2Medio).filter(Boolean).sort((a, b) => a - b);
@@ -277,8 +298,8 @@ export async function fetchYieldMap(): Promise<YieldBairro[]> {
   } catch {
     if (DEMO_MODE) {
       // Derive yield estimates from ITBI aggregates + FipeZAP rental data
-      const stats = await loadItbiStats();
-      const neighborhoods = aggregatesToNeighborhoods(stats);
+      const [stats, centers] = await Promise.all([loadItbiStats(), loadBairroCenters()]);
+      const neighborhoods = aggregatesToNeighborhoods(stats, centers);
       return neighborhoods.slice(0, 30).map(n => ({
         bairro: n.bairro,
         precoM2Compra: n.precoM2Medio ?? 0,

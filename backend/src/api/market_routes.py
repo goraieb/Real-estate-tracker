@@ -4,6 +4,7 @@ Provides endpoints for querying ITBI transactions, neighborhood stats,
 price evolution, yield maps, and market alerts.
 """
 
+import re
 from typing import Optional
 
 import aiosqlite
@@ -75,9 +76,13 @@ def _build_transaction_filters(
         params.extend([min(lng1, lng2), max(lng1, lng2)])
 
     if data_inicio:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", data_inicio):
+            raise HTTPException(status_code=400, detail="data_inicio must be YYYY-MM-DD")
         conditions.append("data_transacao >= ?")
         params.append(data_inicio)
     if data_fim:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", data_fim):
+            raise HTTPException(status_code=400, detail="data_fim must be YYYY-MM-DD")
         conditions.append("data_transacao <= ?")
         params.append(data_fim)
     if tipo:
@@ -220,66 +225,68 @@ async def get_neighborhoods():
     """Get SP neighborhood stats with GeoJSON boundaries."""
     db = await get_db()
     try:
-        cursor = await db.execute(
-            """SELECT bairro,
-                      COUNT(*) as qtd_transacoes,
-                      AVG(preco_m2) as preco_m2_medio,
-                      MEDIAN(preco_m2) as preco_m2_mediano
-            FROM transacoes_itbi
-            WHERE preco_m2 IS NOT NULL AND preco_m2 BETWEEN 500 AND 150000
-            GROUP BY bairro
-            ORDER BY preco_m2_medio DESC"""
-        )
-    except Exception:
-        # SQLite doesn't have MEDIAN - use a subquery approach
-        cursor = await db.execute(
-            """SELECT bairro,
-                      COUNT(*) as qtd_transacoes,
-                      AVG(preco_m2) as preco_m2_medio
-            FROM transacoes_itbi
-            WHERE preco_m2 IS NOT NULL AND preco_m2 BETWEEN 500 AND 150000
-            GROUP BY bairro
-            ORDER BY preco_m2_medio DESC"""
-        )
-
-    rows = await cursor.fetchall()
-
-    # Try to get GeoJSON boundaries
-    boundaries = get_sp_neighborhoods_geojson()
-
-    result = []
-    for row in rows:
-        bairro_name = row["bairro"]
-        center = get_bairro_center(bairro_name) if bairro_name else None
-
-        # Compute real median via OFFSET if the MEDIAN extension wasn't available
-        median_val = None
-        if "preco_m2_mediano" in row.keys():
-            median_val = row["preco_m2_mediano"]
-        elif bairro_name:
-            median_cursor = await db.execute(
-                """SELECT preco_m2 FROM transacoes_itbi
-                WHERE bairro = ? AND preco_m2 BETWEEN 500 AND 150000
-                ORDER BY preco_m2
-                LIMIT 1 OFFSET (SELECT COUNT(*) / 2 FROM transacoes_itbi
-                                 WHERE bairro = ? AND preco_m2 BETWEEN 500 AND 150000)""",
-                (bairro_name, bairro_name),
+        try:
+            cursor = await db.execute(
+                """SELECT bairro,
+                          COUNT(*) as qtd_transacoes,
+                          AVG(preco_m2) as preco_m2_medio,
+                          MEDIAN(preco_m2) as preco_m2_mediano
+                FROM transacoes_itbi
+                WHERE preco_m2 IS NOT NULL AND preco_m2 BETWEEN 500 AND 150000
+                GROUP BY bairro
+                ORDER BY preco_m2_medio DESC"""
             )
-            median_row = await median_cursor.fetchone()
-            median_val = median_row["preco_m2"] if median_row else row["preco_m2_medio"]
+        except Exception:
+            # SQLite doesn't have MEDIAN - use a subquery approach
+            cursor = await db.execute(
+                """SELECT bairro,
+                          COUNT(*) as qtd_transacoes,
+                          AVG(preco_m2) as preco_m2_medio
+                FROM transacoes_itbi
+                WHERE preco_m2 IS NOT NULL AND preco_m2 BETWEEN 500 AND 150000
+                GROUP BY bairro
+                ORDER BY preco_m2_medio DESC"""
+            )
 
-        entry = {
-            "bairro": bairro_name,
-            "qtdTransacoes": row["qtd_transacoes"],
-            "precoM2Medio": round(row["preco_m2_medio"], 2) if row["preco_m2_medio"] else None,
-            "precoM2Mediano": round(median_val, 2) if median_val else None,
-            "centroLat": center[0] if center else None,
-            "centroLng": center[1] if center else None,
-        }
-        result.append(entry)
+        rows = await cursor.fetchall()
 
-    await db.close()
-    return {"neighborhoods": result, "boundaries": boundaries}
+        # Try to get GeoJSON boundaries
+        boundaries = get_sp_neighborhoods_geojson()
+
+        result = []
+        for row in rows:
+            bairro_name = row["bairro"]
+            center = get_bairro_center(bairro_name) if bairro_name else None
+
+            # Compute real median via OFFSET if the MEDIAN extension wasn't available
+            median_val = None
+            if "preco_m2_mediano" in row.keys():
+                median_val = row["preco_m2_mediano"]
+            elif bairro_name:
+                median_cursor = await db.execute(
+                    """SELECT preco_m2 FROM transacoes_itbi
+                    WHERE bairro = ? AND preco_m2 BETWEEN 500 AND 150000
+                    ORDER BY preco_m2
+                    LIMIT 1 OFFSET (SELECT COUNT(*) / 2 FROM transacoes_itbi
+                                     WHERE bairro = ? AND preco_m2 BETWEEN 500 AND 150000)""",
+                    (bairro_name, bairro_name),
+                )
+                median_row = await median_cursor.fetchone()
+                median_val = median_row["preco_m2"] if median_row else row["preco_m2_medio"]
+
+            entry = {
+                "bairro": bairro_name,
+                "qtdTransacoes": row["qtd_transacoes"],
+                "precoM2Medio": round(row["preco_m2_medio"], 2) if row["preco_m2_medio"] else None,
+                "precoM2Mediano": round(median_val, 2) if median_val else None,
+                "centroLat": center[0] if center else None,
+                "centroLng": center[1] if center else None,
+            }
+            result.append(entry)
+
+        return {"neighborhoods": result, "boundaries": boundaries}
+    finally:
+        await db.close()
 
 
 @router.get("/price-evolution")
@@ -310,7 +317,7 @@ async def get_price_evolution(
         data = [
             {
                 "date": row["periodo"],
-                "medianPrecoM2": round(row["preco_m2_medio"], 2),
+                "avgPrecoM2": round(row["preco_m2_medio"], 2),
                 "count": row["qtd_transacoes"],
             }
             for row in rows
@@ -622,8 +629,10 @@ async def delete_alert(alert_id: int):
     """Delete a market alert."""
     db = await get_db()
     try:
-        await db.execute("DELETE FROM market_alerts WHERE id = ?", (alert_id,))
+        cursor = await db.execute("DELETE FROM market_alerts WHERE id = ?", (alert_id,))
         await db.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Alert not found")
         return {"ok": True}
     finally:
         await db.close()
