@@ -49,9 +49,31 @@ class ITBIParser:
         else:
             raise ValueError(f"Formato não suportado: {filepath.suffix}")
 
+        # Detect headerless files: if first column is numeric, assume no header
+        if not isinstance(df.columns[0], str):
+            SP_ITBI_HEADERS = [
+                "sql", "endereco", "numero", "complemento", "bairro",
+                "referencia", "cep", "natureza_transacao",
+                "valor_transacao", "data_transacao",
+                "valor_venal_ref", "proporcao_transmitida",
+                "valor_venal_proporcional", "base_calculo",
+                "tipo_financiamento", "valor_financiado",
+                "cartorio", "matricula", "situacao_sql",
+                "area_terreno", "testada", "fracao_ideal",
+                "area_construida", "tipo_imovel", "descricao_uso",
+                "padrao_iptu", "descricao_padrao", "acc_iptu",
+            ]
+            # Re-read with header=None and assign names
+            if filepath.suffix == ".xlsx":
+                df = pd.read_excel(filepath, engine="openpyxl", header=None)
+            else:
+                df = pd.read_csv(filepath, sep=";", encoding="latin-1", header=None)
+            df.columns = SP_ITBI_HEADERS[: len(df.columns)]
+
         # Normaliza nomes de colunas (remove espaços, acentos, lowercase)
         df.columns = (
-            df.columns.str.strip()
+            pd.Index([str(c) for c in df.columns])
+            .str.strip()
             .str.lower()
             .str.replace(" ", "_")
             .str.normalize("NFKD")
@@ -62,6 +84,8 @@ class ITBIParser:
         # Tenta mapear colunas conhecidas
         column_map = self._detect_columns_sp(df.columns.tolist())
         df = df.rename(columns=column_map)
+        # Drop duplicate columns (keep first occurrence)
+        df = df.loc[:, ~df.columns.duplicated()]
 
         # Converte tipos
         if "valor_transacao" in df.columns:
@@ -103,7 +127,8 @@ class ITBIParser:
 
         for target, candidates in patterns.items():
             for col in columns:
-                if col in candidates or any(c in col for c in candidates):
+                col_str = str(col).lower().strip() if not isinstance(col, float) else ""
+                if col_str and (col_str in candidates or any(c in col_str for c in candidates)):
                     mapping[col] = target
                     break
 

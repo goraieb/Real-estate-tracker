@@ -353,15 +353,25 @@ def _assign_bairro_center_coords(rec: dict) -> dict:
 
     This enables immediate map display without waiting for Nominatim geocoding.
     Records are marked as geocoded=1 so the API can serve them right away.
+
+    Fallback: if bairro is missing or unresolvable, infers neighborhood from
+    the sql_cadastral setor fiscal (first 3 digits) via SETOR_TO_BAIRRO.
     """
-    from ..services.geo_boundaries import get_bairro_center
+    from ..services.geo_boundaries import get_bairro_center, get_bairro_from_setor
 
     bairro = rec.get("bairro")
-    if not bairro:
-        return rec
+    center = get_bairro_center(bairro) if bairro else None
 
-    center = get_bairro_center(bairro)
-    if not center:
+    # Setor fallback: infer bairro from sql_cadastral when bairro lookup fails
+    if center is None:
+        sql = rec.get("sql_cadastral") or ""
+        inferred = get_bairro_from_setor(sql)
+        if inferred:
+            center = get_bairro_center(inferred)
+            if center and not bairro:
+                rec["bairro"] = inferred
+
+    if center is None:
         return rec
 
     # Deterministic offset based on record content to spread points within bairro
@@ -436,6 +446,51 @@ async def insert_transactions(records: list[dict]) -> int:
         return inserted
 
 
+async def backfill_geocoding() -> None:
+    """Re-geocode existing records that have geocoded=0.
+
+    Uses the improved bairro normalization + setor fallback to rescue records
+    that failed to geocode during the original insert.
+    """
+    import aiosqlite
+
+    from ..database.db import DB_PATH
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT id, bairro, sql_cadastral, logradouro, valor_transacao, data_transacao "
+            "FROM transacoes_itbi WHERE geocoded = 0"
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        total = len(rows)
+        if total == 0:
+            logger.info("No un-geocoded records found.")
+            return
+
+        logger.info(f"Backfilling {total:,} un-geocoded records...")
+        updated = 0
+        for row in rows:
+            rec = dict(row)
+            enriched = _assign_bairro_center_coords(rec)
+            if enriched.get("geocoded") == 1:
+                await db.execute(
+                    "UPDATE transacoes_itbi SET latitude=?, longitude=?, geocoded=1, bairro=? WHERE id=?",
+                    (
+                        enriched["latitude"],
+                        enriched["longitude"],
+                        enriched.get("bairro"),
+                        enriched["id"],
+                    ),
+                )
+                updated += 1
+
+        await db.commit()
+        pct = updated / total * 100 if total else 0
+        logger.info(f"Backfilled {updated:,} / {total:,} records ({pct:.1f}%)")
+
+
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -481,10 +536,21 @@ def main():
         action="store_true",
         help="Show statistics about downloaded/parsed data",
     )
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="Re-geocode existing records with geocoded=0 using improved normalization + setor fallback",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     downloader = ITBIDownloader()
+
+    if args.backfill:
+        import asyncio
+
+        asyncio.run(backfill_geocoding())
+        return
 
     if args.download:
         downloader.download_sp(args.download)

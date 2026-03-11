@@ -157,7 +157,7 @@ class DataLoader:
                     if df.empty:
                         continue
                     # Keep last 5 years
-                    cutoff = pd.Timestamp.now() - pd.Timedelta(days=5 * 365)
+                    cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=5 * 365)
                     df = df[df["data"] >= cutoff]
 
                     for _, row in df.iterrows():

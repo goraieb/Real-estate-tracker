@@ -55,7 +55,7 @@ class IpeadataClient:
         df = pd.DataFrame(records)
         # A coluna de data no Ipeadata é 'VALDATA', valor é 'VALVALOR'
         df = df.rename(columns={"VALDATA": "data", "VALVALOR": "valor"})
-        df["data"] = pd.to_datetime(df["data"])
+        df["data"] = pd.to_datetime(df["data"], utc=True)
         df["valor"] = pd.to_numeric(df["valor"], errors="coerce")
         return df[["data", "valor"]].dropna().sort_values("data").reset_index(drop=True)
 

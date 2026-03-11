@@ -150,7 +150,7 @@ async def get_transactions(
     preco_m2_min: Optional[float] = Query(None),
     preco_m2_max: Optional[float] = Query(None),
     bairro: Optional[str] = Query(None),
-    limit: int = Query(5000, le=1_000_000),
+    limit: int = Query(50000, le=1_000_000),
     offset: int = Query(0, ge=0),
 ):
     """Get geocoded ITBI transactions as GeoJSON FeatureCollection."""
