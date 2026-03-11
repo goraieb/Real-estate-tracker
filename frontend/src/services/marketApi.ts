@@ -22,7 +22,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
 
 // Lazy-load static data only in demo mode to avoid bundling it in production
-import { loadItbiStats, loadItbiSample, loadBairroCenters } from './staticData';
+import { loadItbiStats, loadItbiSample, loadBairroCenters, loadRawIndicators } from './staticData';
 import type { ItbiAggregate } from './staticData';
 
 // Convert ITBI aggregates to neighborhood stats format
@@ -398,6 +398,61 @@ export async function fetchNeighborhoodScorecard(): Promise<ScorecardResponse> {
   try {
     return await fetchJson('/api/v1/market/neighborhood-scorecard');
   } catch {
+    if (DEMO_MODE) {
+      const [stats, centers, inds] = await Promise.all([
+        loadItbiStats(), loadBairroCenters(), loadRawIndicators(),
+      ]);
+      const selicAnual = inds.selic_anual;
+      const cdi12m = inds.cdi_12m;
+
+      // Group by bairro, sort periods chronologically
+      const byBairro = new Map<string, typeof stats>();
+      for (const s of stats) {
+        if (!byBairro.has(s.bairro)) byBairro.set(s.bairro, []);
+        byBairro.get(s.bairro)!.push(s);
+      }
+
+      const scorecard: ScorecardEntry[] = [];
+      for (const [bairro, entries] of byBairro.entries()) {
+        entries.sort((a, b) => a.periodo.localeCompare(b.periodo));
+        const latest = entries[entries.length - 1];
+        const older = entries.length >= 3 ? entries[entries.length - 3] : entries[0];
+        const momentum = older.precoM2Mediano > 0
+          ? ((latest.precoM2Mediano - older.precoM2Mediano) / older.precoM2Mediano * 100)
+          : null;
+        // Yield estimate: inverse of price tier (higher price = lower yield)
+        const yieldLong = latest.precoM2Mediano > 15000 ? 5.5 : latest.precoM2Mediano > 10000 ? 7.0 : 8.5;
+        const yieldAirbnb = yieldLong * 1.4;
+        const spreadVsSelic = yieldLong - selicAnual;
+        const center = centers[bairro] ?? null;
+        const liquidityScore = Math.min(100, Math.round(entries.reduce((s, e) => s + e.count, 0) / 20));
+        scorecard.push({
+          bairro,
+          precoM2: Math.round(latest.precoM2Mediano),
+          momentum6mPct: momentum !== null ? Math.round(momentum * 10) / 10 : null,
+          yieldLongtermPct: yieldLong,
+          yieldAirbnbPct: yieldAirbnb,
+          bestYieldPct: Math.max(yieldLong, yieldAirbnb),
+          spreadVsSelicPp: Math.round(spreadVsSelic * 10) / 10,
+          totalReturnVsCdiPp: cdi12m !== null ? Math.round(((momentum ?? 0) + yieldLong - cdi12m) * 10) / 10 : null,
+          liquidityScore,
+          airbnbDensity: 0,
+          isArbitrage: spreadVsSelic > 0,
+          centroLat: center?.lat ?? null,
+          centroLng: center?.lng ?? null,
+        });
+      }
+      scorecard.sort((a, b) => b.bestYieldPct - a.bestYieldPct);
+      const allPrecos = scorecard.map(s => s.precoM2).sort((a, b) => a - b);
+      const mid = Math.floor(allPrecos.length / 2);
+      return {
+        scorecard,
+        medians: { precoM2: allPrecos[mid] ?? 0, yieldPct: scorecard[mid]?.yieldLongtermPct ?? 0 },
+        benchmarks: { selicAnual, cdi12m },
+        totalBairros: scorecard.length,
+        arbitrageCount: scorecard.filter(s => s.isArbitrage).length,
+      };
+    }
     return { scorecard: [], medians: { precoM2: 0, yieldPct: 0 }, benchmarks: { selicAnual: 0, cdi12m: null }, totalBairros: 0, arbitrageCount: 0 };
   }
 }
@@ -419,6 +474,29 @@ export async function fetchTimingSignals(): Promise<TimingResponse> {
   try {
     return await fetchJson('/api/v1/market/timing-signals');
   } catch {
+    if (DEMO_MODE) {
+      const inds = await loadRawIndicators();
+      const selicScore = inds.selic_anual > 12 ? 0 : inds.selic_anual > 9 ? 1 : 2;
+      const ipcaScore = inds.ipca_12m < 4 ? 2 : inds.ipca_12m < 6 ? 1 : 0;
+      const fipezapScore = 1; // FipeZAP venda +6.3% — positive momentum
+      const score = selicScore + ipcaScore + fipezapScore;
+      const composite: TimingSignal['composite'] = score >= 4 ? 'favorable' : score >= 2 ? 'neutral' : 'unfavorable';
+      return {
+        timeSeries: [],
+        signal: {
+          composite,
+          score,
+          maxScore: 5,
+          details: {
+            selic: `Selic ${inds.selic_anual}% a.a. — ${inds.selic_anual > 12 ? 'alta (desfavorável para compra)' : 'moderada'}`,
+            ipca: `IPCA 12m ${inds.ipca_12m}% — ${inds.ipca_12m < 4 ? 'controlada' : inds.ipca_12m < 6 ? 'moderada' : 'elevada'}`,
+            fipezap: 'FipeZAP venda +6.3% a.a. — apreciação positiva',
+            igpm: `IGP-M ${inds.igpm_12m}% a.a. — custo de construção`,
+          },
+        },
+        months: 12,
+      };
+    }
     return { timeSeries: [], signal: { composite: 'neutral', score: 0, maxScore: 5, details: {} }, months: 0 };
   }
 }

@@ -150,6 +150,22 @@ export interface ItbiAggregate {
   valorTotal: number;
 }
 
+export interface RawIndicators {
+  selic_anual: number;
+  ipca_12m: number;
+  igpm_12m: number;
+  cdi_12m: number | null;
+  ifix_12m: number | null;
+}
+
+export async function loadRawIndicators(): Promise<RawIndicators> {
+  try {
+    return await loadJson<RawIndicators>('indicators.json');
+  } catch {
+    return { selic_anual: 14.25, ipca_12m: 5.06, igpm_12m: 8.45, cdi_12m: 14.15, ifix_12m: 8.30 };
+  }
+}
+
 export async function loadItbiStats(): Promise<ItbiAggregate[]> {
   try {
     return await loadJson<ItbiAggregate[]>('itbi_stats.json');
