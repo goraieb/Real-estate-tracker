@@ -714,15 +714,19 @@ SETOR_TO_BAIRRO: dict[str, str] = {
 }
 
 
-def get_bairro_from_setor(sql_cadastral: str) -> str | None:
+def get_bairro_from_setor(sql_cadastral) -> str | None:
     """Infer bairro name from SQL cadastral setor fiscal (first 3 digits).
 
+    Accepts str or int/float (pandas may parse the column as numeric).
     Falls back to None if sql_cadastral is too short or setor is unknown.
     The returned name still needs to go through get_bairro_center() for coords.
     """
-    if not sql_cadastral or len(sql_cadastral) < 3:
+    if sql_cadastral is None:
         return None
-    setor = sql_cadastral[:3]
+    s = str(sql_cadastral).strip()
+    if len(s) < 3:
+        return None
+    setor = s[:3]
     return SETOR_TO_BAIRRO.get(setor)
 
 
