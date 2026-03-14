@@ -1,33 +1,26 @@
-import { useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Tooltip, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { useMemo, useEffect, useState, useRef, useCallback } from 'react';
+import MapGL, { Marker, Popup, Source, Layer } from 'react-map-gl/maplibre';
+import type { MapRef, MapLayerMouseEvent } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Imovel, DadosMercadoBairro, MapFilter } from '../types';
 import { calcularValorizacao } from '../services/calculations';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 
-// Fix default marker icon issue with webpack/vite
-const defaultIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
-const selectedIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [30, 49],
-  iconAnchor: [15, 49],
-  popupAnchor: [1, -40],
-  shadowSize: [49, 49],
-  className: 'marker-selected',
-});
+const MAP_STYLE = {
+  version: 8 as const,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  sources: {
+    osm: {
+      type: 'raster' as const,
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
+};
 
 interface Props {
   imoveis: Imovel[];
@@ -42,7 +35,6 @@ interface ImovelWithCoords extends Imovel {
   _lng: number;
 }
 
-// Deterministic hash for stable offset when no lat/lng
 function hashCode(s: string): number {
   let hash = 0;
   for (let i = 0; i < s.length; i++) {
@@ -61,50 +53,15 @@ function deterministicOffset(id: string): [number, number] {
   ];
 }
 
-// Color scale: red (negative variation) → yellow (0) → green (positive)
-function getVariacaoColor(variacao: number): string {
-  if (variacao <= -5) return '#ef4444';
-  if (variacao <= -2) return '#f97316';
-  if (variacao <= 0) return '#eab308';
-  if (variacao <= 3) return '#84cc16';
-  if (variacao <= 6) return '#22c55e';
-  return '#16a34a';
-}
-
-function getCircleRadius(precoM2: number): number {
-  // Scale radius based on price/m²: 5k→10px, 15k→25px, 25k→40px
-  return Math.max(8, Math.min(40, precoM2 / 600));
-}
-
-// Auto-fit bounds component
-function FitBounds({ positions }: { positions: [number, number][] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (positions.length > 0) {
-      const bounds = L.latLngBounds(positions.map(p => L.latLng(p[0], p[1])));
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
-    }
-  }, [map, positions]);
-  return null;
-}
-
 function applyFilter(dados: DadosMercadoBairro[], filtro: MapFilter): { bairro: string; cidade: string; centroLat: number; centroLng: number; precoM2: number; variacao: number; amostra: number }[] {
   return dados.map(d => {
     let filtered = d.porTipo;
-    if (filtro.tipo !== 'todos') {
-      filtered = filtered.filter(p => p.tipo === filtro.tipo);
-    }
-    if (filtro.condicao !== 'todos') {
-      filtered = filtered.filter(p => p.condicao === filtro.condicao);
-    }
-    if (filtro.quartos !== 'todos') {
-      filtered = filtered.filter(p => p.quartos === filtro.quartos);
-    }
-
+    if (filtro.tipo !== 'todos') filtered = filtered.filter(p => p.tipo === filtro.tipo);
+    if (filtro.condicao !== 'todos') filtered = filtered.filter(p => p.condicao === filtro.condicao);
+    if (filtro.quartos !== 'todos') filtered = filtered.filter(p => p.quartos === filtro.quartos);
     if (filtered.length === 0) {
       return { bairro: d.bairro, cidade: d.cidade, centroLat: d.centroLat, centroLng: d.centroLng, precoM2: d.precoM2Atual, variacao: d.variacaoPct12m, amostra: 0 };
     }
-
     const totalAmostra = filtered.reduce((s, p) => s + p.amostra, 0);
     const precoM2Pond = totalAmostra > 0
       ? filtered.reduce((s, p) => s + p.precoM2 * p.amostra, 0) / totalAmostra
@@ -112,12 +69,20 @@ function applyFilter(dados: DadosMercadoBairro[], filtro: MapFilter): { bairro: 
     const variacaoPond = totalAmostra > 0
       ? filtered.reduce((s, p) => s + p.variacaoPct12m * p.amostra, 0) / totalAmostra
       : filtered.reduce((s, p) => s + p.variacaoPct12m, 0) / filtered.length;
-
     return { bairro: d.bairro, cidade: d.cidade, centroLat: d.centroLat, centroLng: d.centroLng, precoM2: precoM2Pond, variacao: variacaoPond, amostra: totalAmostra };
   });
 }
 
 export function PropertyMap({ imoveis, selectedId, onSelectImovel, dadosMercado, filtro }: Props) {
+  const mapRef = useRef<MapRef>(null);
+  const [popupImovel, setPopupImovel] = useState<ImovelWithCoords | null>(null);
+  const [hoverInfo, setHoverInfo] = useState<{
+    longitude: number; latitude: number;
+    bairro: string; cidade: string; precoM2: number; variacao: number; amostra: number;
+  } | null>(null);
+  const [cursor, setCursor] = useState('');
+  const fitted = useRef(false);
+
   const cityDefaults: Record<string, [number, number]> = {
     'São Paulo': [-23.5505, -46.6333],
     'Rio de Janeiro': [-22.9068, -43.1729],
@@ -131,9 +96,7 @@ export function PropertyMap({ imoveis, selectedId, onSelectImovel, dadosMercado,
     return imoveis.map(im => {
       const lat = im.endereco.latitude;
       const lng = im.endereco.longitude;
-      if (lat && lng) {
-        return { ...im, _lat: lat, _lng: lng };
-      }
+      if (lat && lng) return { ...im, _lat: lat, _lng: lng };
       const city = im.endereco.cidade;
       const [dlat, dlng] = cityDefaults[city] ?? [-23.5505, -46.6333];
       const [oLat, oLng] = deterministicOffset(im.id);
@@ -147,11 +110,52 @@ export function PropertyMap({ imoveis, selectedId, onSelectImovel, dadosMercado,
     return applyFilter(dadosMercado, f);
   }, [dadosMercado, filtro]);
 
-  const allPositions = useMemo<[number, number][]>(() => {
-    const pts: [number, number][] = mapped.map(m => [m._lat, m._lng]);
-    mercadoFiltrado.forEach(d => pts.push([d.centroLat, d.centroLng]));
-    return pts;
+  const marketGeoJson = useMemo(() => ({
+    type: 'FeatureCollection' as const,
+    features: mercadoFiltrado.map(d => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [d.centroLng, d.centroLat] },
+      properties: { bairro: d.bairro, cidade: d.cidade, precoM2: d.precoM2, variacao: d.variacao, amostra: d.amostra },
+    })),
+  }), [mercadoFiltrado]);
+
+  // Fit bounds once on load
+  useEffect(() => {
+    if (fitted.current || !mapRef.current) return;
+    const pts = [
+      ...mapped.map(m => [m._lng, m._lat] as [number, number]),
+      ...mercadoFiltrado.map(d => [d.centroLng, d.centroLat] as [number, number]),
+    ];
+    if (pts.length === 0) return;
+    const lngs = pts.map(p => p[0]);
+    const lats = pts.map(p => p[1]);
+    mapRef.current.fitBounds(
+      [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+      { padding: 40, maxZoom: 14, duration: 0 },
+    );
+    fitted.current = true;
   }, [mapped, mercadoFiltrado]);
+
+  const onMarketHover = useCallback((e: MapLayerMouseEvent) => {
+    const feature = e.features?.[0];
+    if (feature?.properties) {
+      setCursor('pointer');
+      setHoverInfo({
+        longitude: e.lngLat.lng,
+        latitude: e.lngLat.lat,
+        bairro: feature.properties.bairro as string,
+        cidade: feature.properties.cidade as string,
+        precoM2: feature.properties.precoM2 as number,
+        variacao: feature.properties.variacao as number,
+        amostra: feature.properties.amostra as number,
+      });
+    }
+  }, []);
+
+  const onMarketLeave = useCallback(() => {
+    setCursor('');
+    setHoverInfo(null);
+  }, []);
 
   if (mapped.length === 0 && mercadoFiltrado.length === 0) {
     return (
@@ -161,88 +165,126 @@ export function PropertyMap({ imoveis, selectedId, onSelectImovel, dadosMercado,
     );
   }
 
-  const center: [number, number] = [
-    mapped.reduce((s, m) => s + m._lat, 0) / Math.max(mapped.length, 1),
-    mapped.reduce((s, m) => s + m._lng, 0) / Math.max(mapped.length, 1),
-  ];
+  const center = {
+    longitude: mapped.reduce((s, m) => s + m._lng, 0) / Math.max(mapped.length, 1),
+    latitude: mapped.reduce((s, m) => s + m._lat, 0) / Math.max(mapped.length, 1),
+  };
 
   return (
     <div className="map-container">
-      <MapContainer center={center} zoom={12} style={{ height: '100%', width: '100%', borderRadius: 12 }}>
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <FitBounds positions={allPositions} />
-
-        {/* Market data circles */}
-        {mercadoFiltrado.map(d => (
-          <CircleMarker
-            key={`${d.bairro}-${d.cidade}`}
-            center={[d.centroLat, d.centroLng]}
-            radius={getCircleRadius(d.precoM2)}
-            pathOptions={{
-              fillColor: getVariacaoColor(d.variacao),
-              fillOpacity: 0.5,
-              color: getVariacaoColor(d.variacao),
-              weight: 2,
-              opacity: 0.8,
+      <MapGL
+        ref={mapRef}
+        initialViewState={{ ...center, zoom: 12 }}
+        style={{ height: '100%', width: '100%', borderRadius: 12 }}
+        mapStyle={MAP_STYLE}
+        cursor={cursor}
+        onMouseMove={onMarketHover}
+        onMouseLeave={onMarketLeave}
+        interactiveLayerIds={['market-circles']}
+      >
+        {/* Market data circles (GPU-rendered) */}
+        <Source id="market-data" type="geojson" data={marketGeoJson}>
+          <Layer
+            id="market-circles"
+            type="circle"
+            paint={{
+              'circle-radius': ['interpolate', ['linear'], ['get', 'precoM2'],
+                3000, 8, 9000, 16, 15000, 25, 25000, 40],
+              'circle-color': ['interpolate', ['linear'], ['get', 'variacao'],
+                -5, '#ef4444', -2, '#f97316', 0, '#eab308', 3, '#84cc16', 6, '#22c55e'],
+              'circle-opacity': 0.5,
+              'circle-stroke-width': 2,
+              'circle-stroke-color': ['interpolate', ['linear'], ['get', 'variacao'],
+                -5, '#ef4444', -2, '#f97316', 0, '#eab308', 3, '#84cc16', 6, '#22c55e'],
+              'circle-stroke-opacity': 0.8,
             }}
-          >
-            <Tooltip>
-              <div style={{ minWidth: 140, fontSize: 12 }}>
-                <strong>{d.bairro}</strong> — {d.cidade}
-                <br />
-                Preço/m²: {fmt(d.precoM2)}
-                <br />
-                Variação 12m: <span style={{ color: d.variacao >= 0 ? '#16a34a' : '#ef4444', fontWeight: 600 }}>{fmtPct(d.variacao)}</span>
-                {d.amostra > 0 && <><br />Amostra: {d.amostra} imóveis</>}
-              </div>
-            </Tooltip>
-          </CircleMarker>
-        ))}
+          />
+        </Source>
 
-        {/* Property markers */}
+        {/* Property markers (DOM — few items, rich interaction) */}
         {mapped.map(im => {
-          const val = calcularValorizacao(im);
+          const isSelected = im.id === selectedId;
           return (
             <Marker
               key={im.id}
-              position={[im._lat, im._lng]}
-              icon={im.id === selectedId ? selectedIcon : defaultIcon}
-              eventHandlers={{
-                click: () => onSelectImovel?.(im.id),
+              longitude={im._lng}
+              latitude={im._lat}
+              anchor="bottom"
+              onClick={e => {
+                e.originalEvent.stopPropagation();
+                onSelectImovel?.(im.id);
+                setPopupImovel(im);
               }}
             >
-              <Popup>
-                <div style={{ minWidth: 160 }}>
-                  <strong>{im.nome}</strong>
-                  <br />
-                  <span style={{ fontSize: 12, color: '#64748b' }}>
-                    {im.endereco.bairro}, {im.endereco.cidade}
-                  </span>
-                  <br />
-                  <span style={{ fontSize: 13 }}>
-                    Valor: {fmt(val.valorAtual)}
-                  </span>
-                  <br />
-                  <span style={{ fontSize: 12, color: '#64748b' }}>
-                    {im.areaUtil}m² | {fmt(val.precoM2)}/m²
-                  </span>
-                  {im.financiamento?.saldoDevedor != null && (
-                    <>
-                      <br />
-                      <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                        Dívida: {fmt(im.financiamento.saldoDevedor)}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </Popup>
+              <svg width={isSelected ? 30 : 25} height={isSelected ? 49 : 41} viewBox="0 0 25 41" style={{ cursor: 'pointer' }}>
+                <path
+                  d="M12.5 0C5.6 0 0 5.6 0 12.5S12.5 41 12.5 41 25 19.4 25 12.5 19.4 0 12.5 0z"
+                  fill={isSelected ? '#10b981' : '#3b82f6'}
+                  stroke="#fff"
+                  strokeWidth="2"
+                />
+                <circle cx="12.5" cy="12.5" r="5" fill="#fff" />
+              </svg>
             </Marker>
           );
         })}
-      </MapContainer>
+
+        {/* Property popup */}
+        {popupImovel && (
+          <Popup
+            longitude={popupImovel._lng}
+            latitude={popupImovel._lat}
+            anchor="bottom"
+            offset={[0, -42] as [number, number]}
+            onClose={() => setPopupImovel(null)}
+          >
+            <div style={{ minWidth: 160 }}>
+              <strong>{popupImovel.nome}</strong>
+              <br />
+              <span style={{ fontSize: 12, color: '#64748b' }}>
+                {popupImovel.endereco.bairro}, {popupImovel.endereco.cidade}
+              </span>
+              <br />
+              <span style={{ fontSize: 13 }}>
+                Valor: {fmt(calcularValorizacao(popupImovel).valorAtual)}
+              </span>
+              <br />
+              <span style={{ fontSize: 12, color: '#64748b' }}>
+                {popupImovel.areaUtil}m² | {fmt(calcularValorizacao(popupImovel).precoM2)}/m²
+              </span>
+              {popupImovel.financiamento?.saldoDevedor != null && (
+                <>
+                  <br />
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                    Dívida: {fmt(popupImovel.financiamento.saldoDevedor)}
+                  </span>
+                </>
+              )}
+            </div>
+          </Popup>
+        )}
+
+        {/* Market hover popup */}
+        {hoverInfo && (
+          <Popup
+            longitude={hoverInfo.longitude}
+            latitude={hoverInfo.latitude}
+            closeButton={false}
+            closeOnClick={false}
+            anchor="bottom"
+            offset={[0, -10] as [number, number]}
+          >
+            <div style={{ minWidth: 140, fontSize: 12 }}>
+              <strong>{hoverInfo.bairro}</strong> — {hoverInfo.cidade}
+              <br />
+              Preço/m²: {fmt(hoverInfo.precoM2)}
+              <br />
+              Variação 12m: <span style={{ color: hoverInfo.variacao >= 0 ? '#16a34a' : '#ef4444', fontWeight: 600 }}>{fmtPct(hoverInfo.variacao)}</span>
+              {hoverInfo.amostra > 0 && <><br />Amostra: {hoverInfo.amostra} imóveis</>}
+            </div>
+          </Popup>
+        )}
+      </MapGL>
 
       {/* Legend */}
       {mercadoFiltrado.length > 0 && (

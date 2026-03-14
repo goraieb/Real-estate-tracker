@@ -1,0 +1,50 @@
+name: Build PMTiles
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backend/data/**'
+      - 'scripts/export_geojson.py'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: pip install pandas aiosqlite
+
+      - name: Export ITBI transactions to GeoJSON
+        run: python scripts/export_geojson.py
+
+      - name: Install tippecanoe
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libsqlite3-dev zlib1g-dev
+          git clone https://github.com/felt/tippecanoe.git /tmp/tippecanoe
+          cd /tmp/tippecanoe && make -j$(nproc) && sudo make install
+
+      - name: Build PMTiles
+        run: |
+          tippecanoe \
+            --output=frontend/public/data/itbi_transactions.pmtiles \
+            --layer=transactions \
+            --minimum-zoom=10 \
+            --maximum-zoom=14 \
+            --drop-densest-as-needed \
+            --extend-zooms-if-still-dropping \
+            --force \
+            /tmp/itbi_transactions.geojson
+
+      - name: Upload PMTiles artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pmtiles
+          path: frontend/public/data/itbi_transactions.pmtiles

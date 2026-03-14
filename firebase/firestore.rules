@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User profile
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // Imoveis subcollection
+      match /imoveis/{imovelId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow create: if request.auth != null
+                      && request.auth.uid == uid
+                      && request.auth.token.email_verified == true
+                      && validateImovel(request.resource.data);
+        allow update: if request.auth != null
+                      && request.auth.uid == uid
+                      && request.auth.token.email_verified == true;
+        allow delete: if false; // Use soft delete only
+      }
+
+      // Alerts subcollection
+      match /alerts/{alertId} {
+        allow read, write: if request.auth != null
+                          && request.auth.uid == uid
+                          && request.auth.token.email_verified == true;
+      }
+    }
+
+    // Schema validation function
+    function validateImovel(data) {
+      return data.keys().hasAll(['endereco', 'compra', 'areaUtil', 'createdAt'])
+        && data.areaUtil is number
+        && data.areaUtil > 0
+        && data.compra.valorCompra is number
+        && data.compra.valorCompra > 0;
+    }
+  }
+}

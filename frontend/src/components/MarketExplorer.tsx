@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import MapGL, { Popup, Source, Layer } from 'react-map-gl/maplibre';
+import type { MapRef, MapLayerMouseEvent } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { Star } from 'lucide-react';
 import type { TransacaoITBI, NeighborhoodStats, YieldBairro, MarketAlert, MarketFilters as FilterType, Imovel, MarketLayer } from '../types';
 import { fetchTransactions, fetchNeighborhoods, fetchYieldMap, fetchMarketStats, fetchAlerts, fetchTransactionCount, type DataSourceInfo } from '../services/marketApi';
@@ -9,9 +10,6 @@ import { PriceEvolutionChart } from './PriceEvolutionChart';
 import { TimeLapseControls } from './TimeLapseControls';
 import { MarketAlerts } from './MarketAlerts';
 import { useTimeLapse } from '../hooks/useTimeLapse';
-import { MapViewportTracker, getZoomTier, type MapViewport } from './MapViewportTracker';
-import { useCluster } from '../hooks/useCluster';
-import { ClusterLayer } from './ClusterLayer';
 import { priceToColor, yieldToColor } from '../utils/colors';
 
 interface Props {
@@ -20,28 +18,32 @@ interface Props {
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-/** Compute last day of a YYYY-MM string (e.g. "2024-02" → "2024-02-29") */
 function lastDayOfMonth(yearMonth: string): string {
   const [y, m] = yearMonth.split('-').map(Number);
   const last = new Date(y, m, 0).getDate();
   return `${yearMonth}-${String(last).padStart(2, '0')}`;
 }
 
-// Fit map to neighborhood bounds (once on initial load, uses lightweight neighborhood centers)
-function FitNeighborhoods({ neighborhoods, hasFitted }: { neighborhoods: NeighborhoodStats[]; hasFitted: React.MutableRefObject<boolean> }) {
-  const map = useMap();
-  useEffect(() => {
-    if (hasFitted.current) return;
-    const points = neighborhoods.filter(n => n.centroLat && n.centroLng);
-    if (points.length === 0) return;
-    const bounds = L.latLngBounds(
-      points.map(n => L.latLng(n.centroLat!, n.centroLng!))
-    );
-    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
-    hasFitted.current = true;
-  }, [map, neighborhoods, hasFitted]);
-  return null;
+type ZoomTier = 'city' | 'region' | 'street';
+function getZoomTier(zoom: number): ZoomTier {
+  if (zoom <= 11) return 'city';
+  if (zoom <= 13) return 'region';
+  return 'street';
 }
+
+const MAP_STYLE = {
+  version: 8 as const,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  sources: {
+    osm: {
+      type: 'raster' as const,
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
+};
 
 const defaultFilters: FilterType = {
   dataInicio: '2019-01',
@@ -55,6 +57,7 @@ const defaultFilters: FilterType = {
 };
 
 export function MarketExplorer({ userProperties }: Props) {
+  const mapRef = useRef<MapRef>(null);
   const [transactions, setTransactions] = useState<TransacaoITBI[]>([]);
   const [neighborhoods, setNeighborhoods] = useState<NeighborhoodStats[]>([]);
   const [yieldData, setYieldData] = useState<YieldBairro[]>([]);
@@ -69,14 +72,22 @@ export function MarketExplorer({ userProperties }: Props) {
   const [showTimeLapse, setShowTimeLapse] = useState(false);
   const [dataSource, setDataSource] = useState<DataSourceInfo>({ source: 'mock', total: 0 });
 
-  // Viewport tracking for LOD
-  const [viewport, setViewport] = useState<MapViewport>({ zoom: 12, bounds: null, bboxString: null });
-  const zoomTier = useMemo(() => getZoomTier(viewport.zoom), [viewport.zoom]);
+  // Viewport tracking
+  const [zoom, setZoom] = useState(12);
+  const [bboxString, setBboxString] = useState<string | null>(null);
+  const zoomTier = useMemo(() => getZoomTier(zoom), [zoom]);
   const hasFitted = useRef(false);
+  const [cursor, setCursor] = useState('');
+
+  // Hover popup
+  const [hoverInfo, setHoverInfo] = useState<{
+    longitude: number; latitude: number;
+    layerId: string; properties: Record<string, unknown>;
+  } | null>(null);
 
   const timeLapse = useTimeLapse(filters.dataInicio, filters.dataFim);
 
-  // Load initial reference data (neighborhoods, yield, alerts, stats)
+  // Load reference data
   useEffect(() => {
     async function loadReference() {
       setIsLoading(true);
@@ -100,35 +111,59 @@ export function MarketExplorer({ userProperties }: Props) {
     loadReference();
   }, [filters.dataInicio, filters.dataFim]);
 
-  // Viewport-driven transaction loading (only when zoom > city tier)
+  // Fit bounds on neighborhood load
   useEffect(() => {
-    if (zoomTier === 'city' || !viewport.bboxString) return;
-    if (showTimeLapse) return; // time-lapse manages its own transactions
+    if (hasFitted.current || !mapRef.current || neighborhoods.length === 0) return;
+    const points = neighborhoods.filter(n => n.centroLat && n.centroLng);
+    if (points.length === 0) return;
+    const lngs = points.map(n => n.centroLng!);
+    const lats = points.map(n => n.centroLat!);
+    mapRef.current.fitBounds(
+      [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+      { padding: 30, maxZoom: 14 },
+    );
+    hasFitted.current = true;
+  }, [neighborhoods]);
+
+  // Viewport change handler
+  const handleViewportChange = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const bounds = map.getBounds();
+    const z = map.getZoom();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    setZoom(z);
+    setBboxString(`${sw.lat},${sw.lng},${ne.lat},${ne.lng}`);
+  }, []);
+
+  // Viewport-driven transaction loading
+  useEffect(() => {
+    if (getZoomTier(zoom) === 'city' || !bboxString) return;
+    if (showTimeLapse) return;
 
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       const txns = await fetchTransactions({
-        bbox: viewport.bboxString!,
+        bbox: bboxString,
         dataInicio: filters.dataInicio ? `${filters.dataInicio}-01` : undefined,
         dataFim: filters.dataFim ? lastDayOfMonth(filters.dataFim) : undefined,
         precoM2Min: filters.precoM2Min || undefined,
         precoM2Max: filters.precoM2Max < 50000 ? filters.precoM2Max : undefined,
-        // Street bbox is small → ~500-5K results naturally. Region is wider → cap at 50K.
-        // Supercluster handles 50K points with no lag.
-        limit: zoomTier === 'street' ? 10000 : 50000,
+        limit: getZoomTier(zoom) === 'street' ? 10000 : 50000,
       });
       if (!controller.signal.aborted) setTransactions(txns);
     }, 300);
 
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [viewport.bboxString, zoomTier, showTimeLapse, filters.dataInicio, filters.dataFim, filters.precoM2Min, filters.precoM2Max]);
+  }, [bboxString, zoom, showTimeLapse, filters.dataInicio, filters.dataFim, filters.precoM2Min, filters.precoM2Max]);
 
-  // Clear transactions when zooming to city tier (neighborhood stats handle it)
+  // Clear transactions at city tier
   useEffect(() => {
     if (zoomTier === 'city') setTransactions([]);
   }, [zoomTier]);
 
-  // Filter transactions by tipo if set
+  // Filter transactions
   const filteredTransactions = useMemo(() => {
     let data = showTimeLapse ? timeLapse.currentTransactions : transactions;
     if (filters.tipoImovel.length > 0) {
@@ -137,10 +172,6 @@ export function MarketExplorer({ userProperties }: Props) {
     return data;
   }, [transactions, filters.tipoImovel, showTimeLapse, timeLapse.currentTransactions]);
 
-  // Cluster data for region tier
-  const clusterData = useCluster(filteredTransactions, viewport.zoom, viewport.bounds);
-
-  // Max transaction count for heatmap scaling
   const maxTransactions = useMemo(
     () => Math.max(1, ...neighborhoods.map(n => n.qtdTransacoes)),
     [neighborhoods],
@@ -155,22 +186,74 @@ export function MarketExplorer({ userProperties }: Props) {
     );
   }, []);
 
-  // Portfolio properties with lat/lng
+  // GeoJSON sources
+  const transactionsGeoJson = useMemo(() => ({
+    type: 'FeatureCollection' as const,
+    features: filteredTransactions.map(t => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [t.longitude, t.latitude] },
+      properties: {
+        id: t.id, precoM2: t.precoM2 || 0, valorTransacao: t.valorTransacao,
+        bairro: t.bairro || '', logradouro: t.logradouro || '',
+        tipoImovel: t.tipoImovel || '', areaM2: t.areaM2 || 0,
+        dataTransacao: t.dataTransacao,
+      },
+    })),
+  }), [filteredTransactions]);
+
+  const neighborhoodsGeoJson = useMemo(() => ({
+    type: 'FeatureCollection' as const,
+    features: neighborhoods.filter(n => n.centroLat && n.centroLng).map(n => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [n.centroLng!, n.centroLat!] },
+      properties: {
+        bairro: n.bairro, precoM2Medio: n.precoM2Medio || 0,
+        qtdTransacoes: n.qtdTransacoes,
+        isWatched: watchedBairros.includes(n.bairro) ? 1 : 0,
+        heatRadius: 10 + Math.log2(Math.max(1, n.qtdTransacoes)) * 3,
+        heatOpacity: Math.min(0.7, n.qtdTransacoes / maxTransactions * 0.8),
+        chorRadius: Math.max(12, Math.min(35, (n.precoM2Medio || 0) / 500)),
+        chorColor: priceToColor(n.precoM2Medio || 0),
+      },
+    })),
+  }), [neighborhoods, watchedBairros, maxTransactions]);
+
+  const yieldGeoJson = useMemo(() => ({
+    type: 'FeatureCollection' as const,
+    features: yieldData.filter(y => y.centroLat && y.centroLng).map(y => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [y.centroLng!, y.centroLat!] },
+      properties: {
+        bairro: y.bairro, yieldAnualPct: y.yieldAnualPct,
+        aluguelM2Estimado: y.aluguelM2Estimado, precoM2Compra: y.precoM2Compra,
+        yieldRadius: Math.max(15, Math.min(35, y.yieldAnualPct * 5)),
+        yieldColor: yieldToColor(y.yieldAnualPct),
+      },
+    })),
+  }), [yieldData]);
+
   const portfolioMarkers = useMemo(() => {
     return userProperties.filter(p => p.endereco.latitude && p.endereco.longitude).map(p => ({
-      id: p.id,
-      lat: p.endereco.latitude!,
-      lng: p.endereco.longitude!,
-      nome: p.nome,
-      bairro: p.endereco.bairro,
+      id: p.id, lat: p.endereco.latitude!, lng: p.endereco.longitude!,
+      nome: p.nome, bairro: p.endereco.bairro,
       valorCompra: p.compra.valorCompra,
-      valorAtual: p.valorAtualEstimado || p.compra.valorCompra,
       precoM2Compra: p.compra.valorCompra / p.areaUtil,
       areaUtil: p.areaUtil,
     }));
   }, [userProperties]);
 
-  // Appreciation calculation for portfolio markers
+  const portfolioGeoJson = useMemo(() => ({
+    type: 'FeatureCollection' as const,
+    features: portfolioMarkers.map(p => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
+      properties: {
+        id: p.id, nome: p.nome, bairro: p.bairro,
+        valorCompra: p.valorCompra, precoM2Compra: p.precoM2Compra, areaUtil: p.areaUtil,
+      },
+    })),
+  }), [portfolioMarkers]);
+
   const getAppreciation = useCallback((bairro: string, purchasePriceM2: number) => {
     const nbhd = neighborhoods.find(n => n.bairro?.toLowerCase().includes(bairro.toLowerCase()));
     if (!nbhd?.precoM2Medio) return null;
@@ -178,20 +261,144 @@ export function MarketExplorer({ userProperties }: Props) {
     return { pct, currentMarketM2: nbhd.precoM2Medio };
   }, [neighborhoods]);
 
-  const center: [number, number] = [-23.5505, -46.6333]; // São Paulo center
+  // Interactive layer IDs (only currently visible)
+  const interactiveLayerIds = useMemo(() => {
+    const ids: string[] = [];
+    if (hasLayer('clusters') && zoomTier !== 'city') {
+      ids.push('cluster-circles', 'unclustered-points');
+    }
+    if (hasLayer('heatmap') && zoomTier === 'city') ids.push('heatmap-circles');
+    if (hasLayer('choropleth')) ids.push('choropleth-circles');
+    if (hasLayer('yield')) ids.push('yield-circles');
+    if (hasLayer('portfolio') && portfolioMarkers.length > 0) ids.push('portfolio-circles');
+    return ids;
+  }, [hasLayer, zoomTier, portfolioMarkers.length]);
+
+  // Hover handler
+  const onHover = useCallback((e: MapLayerMouseEvent) => {
+    const feature = e.features?.[0];
+    if (feature?.properties) {
+      setCursor('pointer');
+      setHoverInfo({
+        longitude: e.lngLat.lng,
+        latitude: e.lngLat.lat,
+        layerId: feature.layer?.id ?? '',
+        properties: feature.properties as Record<string, unknown>,
+      });
+    }
+  }, []);
+
+  const onHoverLeave = useCallback(() => {
+    setCursor('');
+    setHoverInfo(null);
+  }, []);
+
+  // Click handler (select bairro)
+  const onClick = useCallback((e: MapLayerMouseEvent) => {
+    const feature = e.features?.[0];
+    if (!feature?.properties) return;
+    const lid = feature.layer?.id;
+    if (lid === 'choropleth-circles' || lid === 'yield-circles') {
+      setSelectedBairro(feature.properties.bairro as string);
+    }
+  }, []);
 
   const tierLabel = zoomTier === 'city' ? 'Visão Geral' : zoomTier === 'region' ? 'Região' : 'Rua';
+
+  // Render popup content based on layer
+  function renderPopupContent() {
+    if (!hoverInfo) return null;
+    const p = hoverInfo.properties;
+    const lid = hoverInfo.layerId;
+
+    if (lid === 'cluster-circles') {
+      const count = p.point_count as number;
+      const avgPrice = (p.priceCount as number) > 0
+        ? (p.sumPrecoM2 as number) / (p.priceCount as number) : 0;
+      return (
+        <div style={{ minWidth: 130, fontSize: 12 }}>
+          <strong>{count} transações</strong>
+          {avgPrice > 0 && <><br />Média: {fmt(avgPrice)}/m²</>}
+        </div>
+      );
+    }
+    if (lid === 'unclustered-points') {
+      return (
+        <div style={{ minWidth: 160, fontSize: 12 }}>
+          <strong>{(p.logradouro as string) || 'Endereço não disponível'}</strong>
+          <br /><span style={{ color: 'var(--text-muted)' }}>{p.bairro as string}</span>
+          <br />
+          {(p.precoM2 as number) > 0 && <>R$/m²: <strong>{fmt(p.precoM2 as number)}</strong><br /></>}
+          Valor: {fmt(p.valorTransacao as number)}
+          {(p.areaM2 as number) > 0 && <><br />{p.areaM2 as number}m² — {p.tipoImovel as string}</>}
+          <br /><span style={{ color: 'var(--text-faint)' }}>{p.dataTransacao as string}</span>
+        </div>
+      );
+    }
+    if (lid === 'heatmap-circles') {
+      return (
+        <div style={{ fontSize: 12 }}>
+          <strong>{p.bairro as string}</strong>: {p.qtdTransacoes as number} transações
+        </div>
+      );
+    }
+    if (lid === 'choropleth-circles') {
+      const isWatched = watchedBairros.includes(p.bairro as string);
+      return (
+        <div style={{ minWidth: 150, fontSize: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <strong>{p.bairro as string}</strong>
+            <button
+              style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+              onClick={e => { e.stopPropagation(); toggleWatchBairro(p.bairro as string); }}
+            >
+              <Star size={12} fill={isWatched ? '#eab308' : 'none'} color={isWatched ? '#eab308' : '#94a3b8'} />
+            </button>
+          </div>
+          Mediana: {fmt(p.precoM2Medio as number)}/m²
+          <br />{p.qtdTransacoes as number} transações
+        </div>
+      );
+    }
+    if (lid === 'yield-circles') {
+      return (
+        <div style={{ minWidth: 150, fontSize: 12 }}>
+          <strong>{p.bairro as string}</strong>
+          <br />Yield: <strong style={{ color: yieldToColor(p.yieldAnualPct as number) }}>
+            {(p.yieldAnualPct as number).toFixed(1)}% a.a.
+          </strong>
+          <br />Aluguel est.: {fmt(p.aluguelM2Estimado as number)}/m²/mês
+          <br />Compra: {fmt(p.precoM2Compra as number)}/m²
+        </div>
+      );
+    }
+    if (lid === 'portfolio-circles') {
+      const appreciation = getAppreciation(p.bairro as string, p.precoM2Compra as number);
+      return (
+        <div style={{ minWidth: 170, fontSize: 12 }}>
+          <strong>★ {p.nome as string}</strong>
+          <br /><span style={{ color: 'var(--text-muted)' }}>{p.bairro as string}</span>
+          <br />Compra: {fmt(p.precoM2Compra as number)}/m² ({p.areaUtil as number}m²)
+          {appreciation && (
+            <>
+              <br />
+              <span style={{ fontWeight: 700, color: appreciation.pct >= 0 ? '#22c55e' : '#ef4444' }}>
+                {appreciation.pct >= 0 ? '+' : ''}{appreciation.pct.toFixed(1)}% vs mercado
+                <br />Mercado: {fmt(appreciation.currentMarketM2)}/m²
+              </span>
+            </>
+          )}
+        </div>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className="market-explorer">
       <div className="me-sidebar">
-        <MarketFilters
-          filters={filters}
-          onChange={setFilters}
-          stats={stats}
-        />
+        <MarketFilters filters={filters} onChange={setFilters} stats={stats} />
 
-        {/* Time-lapse toggle */}
         <button
           className={`mf-chip ${showTimeLapse ? 'active' : ''}`}
           style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
@@ -246,190 +453,172 @@ export function MarketExplorer({ userProperties }: Props) {
           {isLoading && (
             <div className="me-loading-overlay">Carregando dados de mercado...</div>
           )}
-          <MapContainer center={center} zoom={12} style={{ height: '100%', width: '100%' }}>
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <MapViewportTracker onViewportChange={setViewport} />
-            {neighborhoods.length > 0 && <FitNeighborhoods neighborhoods={neighborhoods} hasFitted={hasFitted} />}
-
-            {/* Layer: Transactions — tier-dependent rendering */}
-
-            {/* Region tier: clustered circles */}
-            {hasLayer('clusters') && zoomTier === 'region' && (
-              <ClusterLayer clusters={clusterData} />
-            )}
-
-            {/* Street tier: individual markers */}
-            {hasLayer('clusters') && zoomTier === 'street' && filteredTransactions.map(t => (
-              <CircleMarker
-                key={t.id}
-                center={[t.latitude, t.longitude]}
-                radius={5}
-                pathOptions={{
-                  fillColor: priceToColor(t.precoM2 || 0),
-                  fillOpacity: 0.75,
-                  color: priceToColor(t.precoM2 || 0),
-                  weight: 1,
-                  opacity: 0.9,
+          <MapGL
+            ref={mapRef}
+            initialViewState={{ longitude: -46.6333, latitude: -23.5505, zoom: 12 }}
+            style={{ height: '100%', width: '100%' }}
+            mapStyle={MAP_STYLE}
+            cursor={cursor}
+            onMoveEnd={handleViewportChange}
+            onLoad={handleViewportChange}
+            onMouseMove={onHover}
+            onMouseLeave={onHoverLeave}
+            onClick={onClick}
+            interactiveLayerIds={interactiveLayerIds}
+          >
+            {/* Transactions with native clustering */}
+            {hasLayer('clusters') && zoomTier !== 'city' && (
+              <Source
+                id="transactions"
+                type="geojson"
+                data={transactionsGeoJson}
+                cluster={true}
+                clusterMaxZoom={13}
+                clusterRadius={60}
+                clusterProperties={{
+                  sumPrecoM2: ['+', ['coalesce', ['get', 'precoM2'], 0]],
+                  priceCount: ['+', ['case', ['>', ['get', 'precoM2'], 0], 1, 0]],
                 }}
               >
-                <Tooltip>
-                  <div style={{ minWidth: 160, fontSize: 12 }}>
-                    <strong>{t.logradouro || 'Endereço não disponível'}</strong>
-                    <br />
-                    <span style={{ color: 'var(--text-muted)' }}>{t.bairro}</span>
-                    <br />
-                    {t.precoM2 && <>R$/m²: <strong>{fmt(t.precoM2)}</strong><br /></>}
-                    Valor: {fmt(t.valorTransacao)}
-                    {t.areaM2 && <><br />{t.areaM2}m² — {t.tipoImovel}</>}
-                    <br />
-                    <span style={{ color: 'var(--text-faint)' }}>{t.dataTransacao}</span>
-                  </div>
-                </Tooltip>
-              </CircleMarker>
-            ))}
+                {/* Cluster circles */}
+                <Layer
+                  id="cluster-circles"
+                  type="circle"
+                  filter={['has', 'point_count']}
+                  paint={{
+                    'circle-radius': ['step', ['get', 'point_count'],
+                      15, 10, 20, 100, 28, 500, 38],
+                    'circle-color': ['case',
+                      ['>', ['get', 'priceCount'], 0],
+                      ['interpolate', ['linear'],
+                        ['/', ['get', 'sumPrecoM2'], ['max', ['get', 'priceCount'], 1]],
+                        5000, '#3b82f6', 8000, '#22c55e', 11000, '#eab308', 14000, '#f97316', 18000, '#ef4444'],
+                      '#94a3b8'],
+                    'circle-opacity': 0.65,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-stroke-opacity': 0.5,
+                  }}
+                />
+                {/* Cluster count labels */}
+                <Layer
+                  id="cluster-count"
+                  type="symbol"
+                  filter={['has', 'point_count']}
+                  layout={{
+                    'text-field': '{point_count_abbreviated}',
+                    'text-size': 11,
+                    'text-font': ['Open Sans Regular'],
+                  }}
+                  paint={{ 'text-color': '#ffffff' }}
+                />
+                {/* Unclustered individual points */}
+                <Layer
+                  id="unclustered-points"
+                  type="circle"
+                  filter={['!', ['has', 'point_count']]}
+                  paint={{
+                    'circle-radius': 5,
+                    'circle-color': ['interpolate', ['linear'], ['get', 'precoM2'],
+                      5000, '#3b82f6', 8000, '#22c55e', 11000, '#eab308', 14000, '#f97316', 18000, '#ef4444'],
+                    'circle-opacity': 0.75,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-stroke-opacity': 0.5,
+                  }}
+                />
+              </Source>
+            )}
 
-            {/* Layer: Heatmap (city tier — transaction density) */}
-            {hasLayer('heatmap') && zoomTier === 'city' && neighborhoods.map(n => {
-              if (!n.centroLat || !n.centroLng) return null;
-              return (
-                <CircleMarker
-                  key={`heat-${n.bairro}`}
-                  center={[n.centroLat, n.centroLng]}
-                  radius={10 + Math.log2(Math.max(1, n.qtdTransacoes)) * 3}
-                  pathOptions={{
-                    fillColor: '#ef4444',
-                    fillOpacity: Math.min(0.7, n.qtdTransacoes / maxTransactions * 0.8),
-                    stroke: false,
+            {/* Neighborhood data (heatmap + choropleth) */}
+            <Source id="neighborhoods" type="geojson" data={neighborhoodsGeoJson}>
+              {/* Heatmap density (city tier only) */}
+              {hasLayer('heatmap') && zoomTier === 'city' && (
+                <Layer
+                  id="heatmap-circles"
+                  type="circle"
+                  paint={{
+                    'circle-radius': ['get', 'heatRadius'],
+                    'circle-color': '#ef4444',
+                    'circle-opacity': ['get', 'heatOpacity'],
+                    'circle-stroke-width': 0,
                   }}
-                >
-                  <Tooltip>
-                    <div style={{ fontSize: 12 }}>
-                      <strong>{n.bairro}</strong>: {n.qtdTransacoes} transações
-                    </div>
-                  </Tooltip>
-                </CircleMarker>
-              );
-            })}
+                />
+              )}
 
-            {/* Layer: Choropleth (price by neighborhood) */}
-            {hasLayer('choropleth') && neighborhoods.map(n => {
-              if (!n.centroLat || !n.centroLng || !n.precoM2Medio) return null;
-              const isWatched = watchedBairros.includes(n.bairro);
-              return (
-                <CircleMarker
-                  key={`nbhd-${n.bairro}`}
-                  center={[n.centroLat, n.centroLng]}
-                  radius={Math.max(12, Math.min(35, n.precoM2Medio / 500))}
-                  pathOptions={{
-                    fillColor: priceToColor(n.precoM2Medio),
-                    fillOpacity: 0.4,
-                    color: isWatched ? '#f1fa8c' : priceToColor(n.precoM2Medio),
-                    weight: isWatched ? 3 : 2,
-                    opacity: 0.7,
+              {/* Choropleth price circles */}
+              {hasLayer('choropleth') && (
+                <Layer
+                  id="choropleth-circles"
+                  type="circle"
+                  paint={{
+                    'circle-radius': ['get', 'chorRadius'],
+                    'circle-color': ['interpolate', ['linear'], ['get', 'precoM2Medio'],
+                      5000, '#3b82f6', 8000, '#06b6d4', 11000, '#22c55e', 14000, '#eab308', 18000, '#f97316', 22000, '#ef4444'],
+                    'circle-opacity': 0.4,
+                    'circle-stroke-width': ['case', ['==', ['get', 'isWatched'], 1], 3, 2],
+                    'circle-stroke-color': ['case',
+                      ['==', ['get', 'isWatched'], 1], '#f1fa8c',
+                      ['interpolate', ['linear'], ['get', 'precoM2Medio'],
+                        5000, '#3b82f6', 8000, '#06b6d4', 11000, '#22c55e', 14000, '#eab308', 18000, '#f97316', 22000, '#ef4444']],
+                    'circle-stroke-opacity': 0.7,
                   }}
-                  eventHandlers={{
-                    click: () => setSelectedBairro(n.bairro),
-                  }}
-                >
-                  <Tooltip>
-                    <div style={{ minWidth: 150, fontSize: 12 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <strong>{n.bairro}</strong>
-                        <button
-                          style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
-                          onClick={e => { e.stopPropagation(); toggleWatchBairro(n.bairro); }}
-                        >
-                          <Star size={12} fill={isWatched ? '#eab308' : 'none'} color={isWatched ? '#eab308' : '#94a3b8'} />
-                        </button>
-                      </div>
-                      Mediana: {fmt(n.precoM2Medio)}/m²
-                      <br />
-                      {n.qtdTransacoes} transações
-                    </div>
-                  </Tooltip>
-                </CircleMarker>
-              );
-            })}
+                />
+              )}
+            </Source>
 
-            {/* Layer: Yield */}
-            {hasLayer('yield') && yieldData.map(y => {
-              if (!y.centroLat || !y.centroLng) return null;
-              return (
-                <CircleMarker
-                  key={`yield-${y.bairro}`}
-                  center={[y.centroLat, y.centroLng]}
-                  radius={Math.max(15, Math.min(35, y.yieldAnualPct * 5))}
-                  pathOptions={{
-                    fillColor: yieldToColor(y.yieldAnualPct),
-                    fillOpacity: 0.5,
-                    color: yieldToColor(y.yieldAnualPct),
-                    weight: 2,
-                    opacity: 0.8,
+            {/* Yield layer */}
+            {hasLayer('yield') && (
+              <Source id="yield-data" type="geojson" data={yieldGeoJson}>
+                <Layer
+                  id="yield-circles"
+                  type="circle"
+                  paint={{
+                    'circle-radius': ['get', 'yieldRadius'],
+                    'circle-color': ['interpolate', ['linear'], ['get', 'yieldAnualPct'],
+                      4.0, '#ef4444', 5.0, '#f97316', 5.5, '#eab308', 6.0, '#84cc16', 7.0, '#22c55e', 8.0, '#16a34a'],
+                    'circle-opacity': 0.5,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': ['interpolate', ['linear'], ['get', 'yieldAnualPct'],
+                      4.0, '#ef4444', 5.0, '#f97316', 5.5, '#eab308', 6.0, '#84cc16', 7.0, '#22c55e', 8.0, '#16a34a'],
+                    'circle-stroke-opacity': 0.8,
                   }}
-                  eventHandlers={{
-                    click: () => setSelectedBairro(y.bairro),
-                  }}
-                >
-                  <Tooltip>
-                    <div style={{ minWidth: 150, fontSize: 12 }}>
-                      <strong>{y.bairro}</strong>
-                      <br />
-                      Yield: <strong style={{ color: yieldToColor(y.yieldAnualPct) }}>
-                        {y.yieldAnualPct.toFixed(1)}% a.a.
-                      </strong>
-                      <br />
-                      Aluguel est.: {fmt(y.aluguelM2Estimado)}/m²/mês
-                      <br />
-                      Compra: {fmt(y.precoM2Compra)}/m²
-                    </div>
-                  </Tooltip>
-                </CircleMarker>
-              );
-            })}
+                />
+              </Source>
+            )}
 
-            {/* Layer: Portfolio overlay (always visible) */}
-            {hasLayer('portfolio') && portfolioMarkers.map(p => {
-              const appreciation = getAppreciation(p.bairro, p.precoM2Compra);
-              return (
-                <CircleMarker
-                  key={`portfolio-${p.id}`}
-                  center={[p.lat, p.lng]}
-                  radius={10}
-                  pathOptions={{
-                    fillColor: '#f1fa8c',
-                    fillOpacity: 0.9,
-                    color: '#282a36',
-                    weight: 3,
-                    opacity: 1,
+            {/* Portfolio overlay */}
+            {hasLayer('portfolio') && portfolioMarkers.length > 0 && (
+              <Source id="portfolio" type="geojson" data={portfolioGeoJson}>
+                <Layer
+                  id="portfolio-circles"
+                  type="circle"
+                  paint={{
+                    'circle-radius': 10,
+                    'circle-color': '#f1fa8c',
+                    'circle-opacity': 0.9,
+                    'circle-stroke-width': 3,
+                    'circle-stroke-color': '#282a36',
+                    'circle-stroke-opacity': 1,
                   }}
-                >
-                  <Tooltip>
-                    <div style={{ minWidth: 170, fontSize: 12 }}>
-                      <strong>★ {p.nome}</strong>
-                      <br />
-                      <span style={{ color: 'var(--text-muted)' }}>{p.bairro}</span>
-                      <br />
-                      Compra: {fmt(p.precoM2Compra)}/m² ({p.areaUtil}m²)
-                      <br />
-                      {appreciation && (
-                        <span style={{
-                          fontWeight: 700,
-                          color: appreciation.pct >= 0 ? '#22c55e' : '#ef4444',
-                        }}>
-                          {appreciation.pct >= 0 ? '+' : ''}{appreciation.pct.toFixed(1)}% vs mercado
-                          <br />
-                          Mercado: {fmt(appreciation.currentMarketM2)}/m²
-                        </span>
-                      )}
-                    </div>
-                  </Tooltip>
-                </CircleMarker>
-              );
-            })}
-          </MapContainer>
+                />
+              </Source>
+            )}
+
+            {/* Hover popup */}
+            {hoverInfo && (
+              <Popup
+                longitude={hoverInfo.longitude}
+                latitude={hoverInfo.latitude}
+                closeButton={false}
+                closeOnClick={false}
+                anchor="bottom"
+                offset={[0, -10] as [number, number]}
+              >
+                {renderPopupContent()}
+              </Popup>
+            )}
+          </MapGL>
 
           {/* Legend */}
           <div className="me-legend">
@@ -479,7 +668,7 @@ export function MarketExplorer({ userProperties }: Props) {
           </div>
         </div>
 
-        {/* Price evolution chart (when bairro selected) */}
+        {/* Price evolution chart */}
         {selectedBairro && (
           <PriceEvolutionChart
             bairro={selectedBairro}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info, Sun, Moon, Search } from 'lucide-react';
+import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info, Sun, Moon, Search, LogOut } from 'lucide-react';
+import { useAuth } from './firebase/auth';
 import { PropertyCard } from './components/PropertyCard';
 import { PropertyMap } from './components/PropertyMap';
 import { MapFilters } from './components/MapFilters';
@@ -17,7 +18,6 @@ import { FipeZapChart } from './components/FipeZapChart';
 import { NeighborhoodScorecard } from './components/NeighborhoodScorecard';
 import { MarketTimingDashboard } from './components/MarketTimingDashboard';
 import { Toast, makeToast, type ToastMessage } from './components/Toast';
-import { ErrorBoundary } from './components/ErrorBoundary';
 import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
 import { FIPEZAP_MARKET_DATA } from './services/fipezapData';
@@ -51,6 +51,7 @@ function App() {
     fetchImoveis, fetchBenchmarks, selectImovel,
     criarImovel, atualizarImovel, deletarImovel, toggleTheme,
   } = useStore();
+  const { user, signOut } = useAuth();
 
   const [showForm, setShowForm] = useState(false);
   const [editingImovel, setEditingImovel] = useState<Imovel | null>(null);
@@ -145,6 +146,11 @@ function App() {
             <Plus size={18} />
             Adicionar imóvel
           </button>
+          {user && (
+            <button className="btn-theme-toggle" onClick={signOut} title="Sair">
+              <LogOut size={18} />
+            </button>
+          )}
         </div>
       </header>
 
