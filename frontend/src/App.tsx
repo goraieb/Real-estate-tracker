@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info, Sun, Moon, Search } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { LayoutDashboard, Plus, Loader2, List, Map, Calculator, TrendingUp, Info, Sun, Moon, Search, LogOut } from 'lucide-react';
+import { useAuth } from './firebase/auth';
 import { PropertyCard } from './components/PropertyCard';
 import { PropertyMap } from './components/PropertyMap';
 import { MapFilters } from './components/MapFilters';
@@ -16,6 +17,7 @@ import { EconomicIndicators } from './components/EconomicIndicators';
 import { FipeZapChart } from './components/FipeZapChart';
 import { NeighborhoodScorecard } from './components/NeighborhoodScorecard';
 import { MarketTimingDashboard } from './components/MarketTimingDashboard';
+import { Toast, makeToast, type ToastMessage } from './components/Toast';
 import { useStore } from './store/useStore';
 import { calcularValorizacao, calcularValorizacaoDetalhada, calcularYieldLongterm, calcularYieldAirbnb } from './services/calculations';
 import { FIPEZAP_MARKET_DATA } from './services/fipezapData';
@@ -49,6 +51,7 @@ function App() {
     fetchImoveis, fetchBenchmarks, selectImovel,
     criarImovel, atualizarImovel, deletarImovel, toggleTheme,
   } = useStore();
+  const { user, signOut } = useAuth();
 
   const [showForm, setShowForm] = useState(false);
   const [editingImovel, setEditingImovel] = useState<Imovel | null>(null);
@@ -56,6 +59,15 @@ function App() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [mapFilter, setMapFilter] = useState<MapFilter>({ tipo: 'todos', condicao: 'todos', quartos: 'todos' });
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = useCallback((type: ToastMessage['type'], message: string) => {
+    setToasts(prev => [...prev, makeToast(type, message)]);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   useEffect(() => {
     fetchImoveis();
@@ -77,16 +89,27 @@ function App() {
   }
 
   async function handleSave(data: Record<string, unknown>) {
-    if (editingImovel) {
-      await atualizarImovel(editingImovel.id, data);
-    } else {
-      await criarImovel(data);
+    try {
+      if (editingImovel) {
+        await atualizarImovel(editingImovel.id, data);
+        addToast('success', 'Imóvel atualizado com sucesso.');
+      } else {
+        await criarImovel(data);
+        addToast('success', 'Imóvel adicionado com sucesso.');
+      }
+    } catch {
+      addToast('error', 'Erro ao salvar imóvel. Tente novamente.');
     }
   }
 
   async function handleDeleteConfirm() {
     if (deleteTarget) {
-      await deletarImovel(deleteTarget.id);
+      try {
+        await deletarImovel(deleteTarget.id);
+        addToast('success', `"${deleteTarget.nome}" excluído.`);
+      } catch {
+        addToast('error', 'Erro ao excluir imóvel. Tente novamente.');
+      }
       setDeleteTarget(null);
     }
   }
@@ -123,6 +146,11 @@ function App() {
             <Plus size={18} />
             Adicionar imóvel
           </button>
+          {user && (
+            <button className="btn-theme-toggle" onClick={signOut} title="Sair">
+              <LogOut size={18} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -260,6 +288,9 @@ function App() {
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* Toast notifications */}
+      <Toast toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }
