@@ -2,10 +2,6 @@ name: Build PMTiles
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'backend/data/**'
-      - 'scripts/export_geojson.py'
 
 jobs:
   build:
